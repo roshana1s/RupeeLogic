@@ -1,0 +1,180 @@
+{
+  "asset_classes": {
+    "savings_account": {
+      "name": "Savings Account",
+      "risk": "Very Low",
+      "return": "Very Low (2-4% p.a.)",
+      "liquidity": "Very High",
+      "description": "Basic savings account for emergency funds and daily liquidity needs. FDIC insured up to LKR 1,100,000 per depositor per bank.",
+      "examples": "Commercial Bank Savings Plus, HNB Salary Saver, Sampath Savari, NSB Savari, People's Bank Sahana",
+      "typical_return": "2-4%",
+      "min_investment": "LKR 100"
+    },
+    "fixed_deposits": {
+      "name": "Fixed Deposits (Time Deposits)",
+      "risk": "Very Low",
+      "return": "Low to Moderate (8-12% p.a.)",
+      "liquidity": "Low (Locked for term)",
+      "description": "Guaranteed fixed returns for a specific period (1 month to 5 years). Principal protected. Best for capital preservation and short-term goals.",
+      "examples": "Commercial Bank FDs (9-11%), HNB Time Deposits (9-10.5%), Sampath Bank FDs (8.5-11%), NDB Fixed Deposits (9-11%), BOC Fixed Deposits (8.5-10%)",
+      "typical_return": "9-11%",
+      "min_investment": "LKR 10,000"
+    },
+    "treasury_bills": {
+      "name": "Treasury Bills (T-Bills)",
+      "risk": "Very Low",
+      "return": "Low to Moderate (9-13% p.a.)",
+      "liquidity": "Medium",
+      "description": "Short-term government securities (91, 182, 364 days). Backed by Government of Sri Lanka. Zero default risk.",
+      "examples": "Available through Central Bank auctions, primary dealers (DFCC, NDB, Commercial Bank Treasury), or Unit Trust funds",
+      "typical_return": "10-12%",
+      "min_investment": "LKR 100,000"
+    },
+    "government_bonds": {
+      "name": "Government Bonds (Treasury Bonds)",
+      "risk": "Very Low",
+      "return": "Moderate (10-14% p.a.)",
+      "liquidity": "Medium",
+      "description": "Long-term government securities (2-30 years). Regular interest payments (semi-annual). Sovereign guarantee.",
+      "examples": "Sri Lanka Development Bonds, available via EPF contributions, Unit Trusts, or directly through primary dealers",
+      "typical_return": "11-13%",
+      "min_investment": "LKR 100,000"
+    },
+    "corporate_bonds": {
+      "name": "Corporate Debentures",
+      "risk": "Low to Medium",
+      "return": "Moderate to High (11-15% p.a.)",
+      "liquidity": "Medium",
+      "description": "Debt issued by corporations. Higher returns than government bonds but with credit risk. Check credit ratings (ICRA, Fitch).",
+      "examples": "DFCC Bank Debentures, Commercial Bank Debentures, John Keells Holdings Debentures, Hayleys Debentures, Dialog Axiata Debentures",
+      "typical_return": "12-14%",
+      "min_investment": "LKR 100,000"
+    },
+    "money_market_funds": {
+      "name": "Money Market Unit Trusts",
+      "risk": "Very Low",
+      "return": "Low (6-9% p.a.)",
+      "liquidity": "Very High",
+      "description": "Invests in short-term government securities and money market instruments. Better than savings accounts, highly liquid.",
+      "examples": "NDB Wealth Money Plus Fund, CAL Money Market Fund, Acuity Money Market Fund, Guardian Acuity Money Market Fund",
+      "typical_return": "7-8%",
+      "min_investment": "LKR 5,000"
+    },
+    "income_unit_trusts": {
+      "name": "Income/Bond Unit Trusts",
+      "risk": "Low",
+      "return": "Moderate (8-12% p.a.)",
+      "liquidity": "High",
+      "description": "Invests primarily in government bonds and high-grade corporate debt. Stable returns with capital preservation focus.",
+      "examples": "NDB Wealth Gilt Edge Fund, CAL Income Fund, Softlogic Gilt Edge Fund, Guardian Acuity Income Fund, JB Vantage Income Fund",
+      "typical_return": "9-11%",
+      "min_investment": "LKR 10,000"
+    },
+    "balanced_unit_trusts": {
+      "name": "Balanced Unit Trusts",
+      "risk": "Medium",
+      "return": "Moderate to High (10-18% p.a.)",
+      "liquidity": "High",
+      "description": "Mix of equities (30-60%) and fixed income (40-70%). Balanced risk-return profile for medium-term investors.",
+      "examples": "NDB Wealth Balanced Fund, CAL Growth & Income Fund, Softlogic Balanced Fund, Guardian Acuity Balanced Income Fund, DCSL Balanced Fund",
+      "typical_return": "12-15%",
+      "min_investment": "LKR 10,000"
+    },
+    "equity_unit_trusts": {
+      "name": "Equity Unit Trusts",
+      "risk": "High",
+      "return": "High (12-25% p.a.)",
+      "liquidity": "High",
+      "description": "Invests primarily (80%+) in CSE-listed stocks. Professionally managed. Higher growth potential with volatility.",
+      "examples": "NDB Wealth Eagle Fund, CAL Equity Fund, Softlogic Equity Fund, Guardian Acuity Equity Fund, JB Vantage Equity Fund, DCSL Equity Fund",
+      "typical_return": "15-20%",
+      "min_investment": "LKR 10,000"
+    },
+    "cse_blue_chip_stocks": {
+      "name": "CSE Blue Chip Stocks",
+      "risk": "High",
+      "return": "High (15-30% p.a.)",
+      "liquidity": "High",
+      "description": "Large-cap, established companies on Colombo Stock Exchange. Lower risk within equity segment.",
+      "examples": "John Keells Holdings (JKH), Commercial Bank (COMB), Hayleys (HAYL), Dialog Axiata (DIAL), LOLC Holdings, Sampath Bank (SAMP), Tokyo Cement",
+      "typical_return": "18-25%",
+      "min_investment": "LKR 5,000"
+    },
+    "cse_growth_stocks": {
+      "name": "CSE Growth Stocks",
+      "risk": "Very High",
+      "return": "Very High (20-50% p.a.)",
+      "liquidity": "Medium to High",
+      "description": "Mid and small-cap stocks with high growth potential. Higher volatility and risk. Requires research and monitoring.",
+      "examples": "Bairaha Farms, Royal Ceramics, Access Engineering, Sunshine Holdings, Ceylon Cold Stores, Cargills Ceylon, Browns Investments",
+      "typical_return": "25-40%",
+      "min_investment": "LKR 2,000"
+    },
+    "etf_funds": {
+      "name": "Exchange Traded Funds (ETFs)",
+      "risk": "Medium to High",
+      "return": "Moderate to High (10-20% p.a.)",
+      "liquidity": "Very High",
+      "description": "Passively managed funds tracking market indices. Low expense ratios. Trade like stocks on CSE.",
+      "examples": "Colombo Stock Exchange S&P SL20 ETF (tracks top 20 companies)",
+      "typical_return": "12-18%",
+      "min_investment": "LKR 5,000"
+    },
+    "real_estate": {
+      "name": "Real Estate Investment",
+      "risk": "Medium",
+      "return": "Moderate to High (8-15% p.a.)",
+      "liquidity": "Very Low",
+      "description": "Property investment for rental income or capital appreciation. Illiquid but tangible asset. Consider location carefully.",
+      "examples": "Residential properties (Colombo, Kandy, Galle), Commercial properties, Land banking in developing areas",
+      "typical_return": "10-12%",
+      "min_investment": "LKR 5,000,000+"
+    },
+    "gold": {
+      "name": "Gold Investment",
+      "risk": "Medium",
+      "return": "Moderate (5-12% p.a.)",
+      "liquidity": "High",
+      "description": "Hedge against inflation and currency depreciation. Physical gold or gold savings accounts.",
+      "examples": "Physical gold (jewelry, coins, bars), Ceylinco Gold Saver, Commercial Bank Gold Saver, HNB Gold Savings",
+      "typical_return": "8-10%",
+      "min_investment": "LKR 10,000"
+    },
+    "epf_contribution": {
+      "name": "EPF/ETF Contributions",
+      "risk": "Very Low",
+      "return": "Low to Moderate (9-13% p.a.)",
+      "liquidity": "Very Low (Locked until retirement)",
+      "description": "Mandatory retirement savings for employees. EPF: 20% (12% employer, 8% employee). Tax-free returns.",
+      "examples": "Employees' Provident Fund (EPF) - managed by Central Bank, Employees' Trust Fund (ETF) - 3% employer contribution",
+      "typical_return": "10-12%",
+      "min_investment": "Automatic from salary"
+    }
+  },
+  "investment_rules": {
+    "emergency_fund_rule": "Build emergency fund equal to 6 months of expenses before aggressive investing",
+    "debt_payoff_rule": "Pay off high-interest debt (>15% p.a.) before investing in volatile assets",
+    "age_equity_rule": "Equity allocation = 100 - Age (Conservative Sri Lankan approach: 80 - Age)",
+    "diversification_rule": "No single stock should exceed 10% of portfolio; No single asset class should exceed 40%",
+    "rebalancing_rule": "Review and rebalance portfolio at least annually",
+    "liquidity_rule": "Maintain at least 10-15% in highly liquid assets",
+    "epf_optimization": "Maximize EPF contributions - risk-free 10%+ returns with tax benefits"
+  },
+  "risk_profiles": {
+    "conservative": {
+      "description": "Capital preservation focused. Suitable for retirees or very risk-averse investors.",
+      "typical_allocation": "70-80% Fixed Income, 10-20% Equity, 10% Cash",
+      "recommended_assets": ["fixed_deposits", "treasury_bills", "government_bonds", "income_unit_trusts", "savings_account"]
+    },
+    "moderate": {
+      "description": "Balanced growth and income. Suitable for middle-aged investors with medium risk tolerance.",
+      "typical_allocation": "40-50% Fixed Income, 40-50% Equity, 10% Cash/Gold",
+      "recommended_assets": ["balanced_unit_trusts", "income_unit_trusts", "equity_unit_trusts", "corporate_bonds", "cse_blue_chip_stocks"]
+    },
+    "aggressive": {
+      "description": "Maximum growth focused. Suitable for young investors with high risk tolerance and long time horizon.",
+      "typical_allocation": "20-30% Fixed Income, 60-70% Equity, 10% Alternative",
+      "recommended_assets": ["equity_unit_trusts", "cse_blue_chip_stocks", "cse_growth_stocks", "etf_funds", "balanced_unit_trusts"]
+    }
+  }
+}

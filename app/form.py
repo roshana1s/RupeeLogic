@@ -159,6 +159,7 @@ if submitted:
 
         # 4. Get Results
         allocations = [f for f in engine.facts.values() if isinstance(f, Allocation)]
+        alternative_allocations = engine.alternative_plans  # Get alternative plans
         fired_rules = engine.fired_rules  # Get the list of fired rules
 
         st.markdown("---")
@@ -177,7 +178,7 @@ if submitted:
                     f"""
                 **{debt_payment[0]['reason']}**
                 
-                **Why this matters:** {debt_payment[0]['reference']}
+                **Why this matters:** {debt_payment[0]['reference']}**
                 
                 **Recommended Action:**
                 1. Stop new investments temporarily
@@ -188,144 +189,526 @@ if submitted:
                 )
                 st.stop()
 
-            # Create DataFrame for visualization
-            chart_data = []
-            detail_data = []
+            # Separate primary and alternative plans
+            primary_allocations = [
+                a for a in allocations if a.get("plan_type") == "primary"
+            ]
 
-            for alloc in allocations:
-                asset_class_key = alloc["asset_class"]
-                asset_info = asset_details.get(asset_class_key, {})
-
-                if asset_info:
-                    chart_data.append(
-                        {
-                            "Asset Class": asset_info["name"],
-                            "Allocation (%)": alloc["percent"],
-                            "Risk": asset_info["risk"],
-                            "Expected Return": asset_info.get(
-                                "typical_return", asset_info["return"]
-                            ),
-                            "Liquidity": asset_info["liquidity"],
-                        }
-                    )
-
-                    detail_data.append({"asset_info": asset_info, "allocation": alloc})
-
-            df_chart = pd.DataFrame(chart_data)
-
-            # Calculate monthly investment amount (income - expenses)
+            # Calculate monthly investment amount
             monthly_investable = monthly_income - monthly_expenses
 
-            # Sort by allocation percentage to find the primary recommendation
-            df_sorted = df_chart.sort_values("Allocation (%)", ascending=False)
+            # ========== INVESTMENT OVERVIEW ==========
+            st.markdown("## 💼 Your Investment Overview")
 
-            # --- PRIMARY RECOMMENDATION ---
-            st.markdown("## ✅ Best Recommendation for You")
+            col_overview1, col_overview2, col_overview3 = st.columns(3)
 
-            primary = df_sorted.iloc[0]
-            primary_asset_key = allocations[0]["asset_class"]
-            primary_details = next(
-                (
-                    item
-                    for item in detail_data
-                    if item["asset_info"]["name"] == primary["Asset Class"]
-                ),
-                None,
-            )
+            with col_overview1:
+                st.metric("💰 Current Savings", f"LKR {current_savings:,.0f}")
+                st.metric("📅 Monthly Investable", f"LKR {monthly_investable:,.0f}")
 
-            # Calculate rupee amounts
-            primary_amount_current = (primary["Allocation (%)"] / 100) * current_savings
-            primary_amount_monthly = (
-                primary["Allocation (%)"] / 100
-            ) * monthly_investable
+            with col_overview2:
+                st.metric("⚡ Risk Tolerance", risk_tolerance)
+                st.metric("🎯 Investment Goal", goal_type)
 
-            # Create prominent display for primary recommendation
-            col_main1, col_main2 = st.columns([2, 1])
-
-            with col_main1:
-                st.markdown(f"### 🏆 {primary['Asset Class']}")
-                st.markdown(
-                    f"#### Allocate **{primary['Allocation (%)']}%** of your portfolio here"
-                )
-
-                # Show specific amounts
-                st.success(
-                    f"💰 **Invest LKR {primary_amount_current:,.0f}** from current savings"
-                )
-                if monthly_investable > 0:
-                    st.success(
-                        f"📅 **Add LKR {primary_amount_monthly:,.0f}/month** from your income"
-                    )
-
-                if primary_details:
-                    st.info(f"**Why?** {primary_details['allocation']['reason']}")
-
-                    # Show where to invest
-                    st.markdown("**🏦 Where to Invest:**")
-                    examples = primary_details["asset_info"].get("examples", "")
-                    if isinstance(examples, list):
-                        for ex in examples[:3]:  # Show top 3
-                            st.markdown(f"✅ {ex}")
-                    else:
-                        st.markdown(f"✅ {examples}")
-
-            with col_main2:
-                st.markdown("**📊 Key Metrics**")
-                st.metric("🔴 Risk Level", primary["Risk"])
-                st.metric("📈 Expected Return", primary["Expected Return"])
-                st.metric("💧 Liquidity", primary["Liquidity"])
+            with col_overview3:
+                st.metric("⏰ Time Horizon", time_horizon)
+                st.metric("🔢 Your Age", f"{age} years")
 
             st.markdown("---")
 
-            # --- ADDITIONAL RECOMMENDATIONS ---
-            if len(df_sorted) > 1:
-                st.markdown("## 📋 Additional Recommendations")
-                st.markdown("Diversify your portfolio with these asset classes:")
+            # ========== PRIMARY PLAN ==========
+            if primary_allocations:
+                st.markdown("## 🎯 PRIMARY INVESTMENT PLAN")
+
+                # Get confidence for primary plan
+                primary_confidence = primary_allocations[0].get("confidence", 85)
+
+                # Create data for primary plan
+                primary_chart_data = []
+                primary_detail_data = []
+
+                for alloc in primary_allocations:
+                    asset_class_key = alloc["asset_class"]
+                    asset_info = asset_details.get(asset_class_key, {})
+
+                    if asset_info:
+                        primary_chart_data.append(
+                            {
+                                "Asset Class": asset_info["name"],
+                                "Allocation (%)": alloc["percent"],
+                                "Risk": asset_info["risk"],
+                                "Expected Return": asset_info.get(
+                                    "typical_return", asset_info["return"]
+                                ),
+                                "Liquidity": asset_info["liquidity"],
+                            }
+                        )
+                        primary_detail_data.append(
+                            {"asset_info": asset_info, "allocation": alloc}
+                        )
+
+                df_primary = pd.DataFrame(primary_chart_data)
+
+                # Calculate expected returns
+                total_expected_low = 0
+                total_expected_high = 0
+                for alloc in primary_allocations:
+                    asset_info = asset_details.get(alloc["asset_class"], {})
+                    typical_return = asset_info.get("typical_return", "0-0%")
+
+                    # Skip non-numeric returns (N/A, etc.)
+                    if typical_return == "N/A" or not typical_return:
+                        continue
+
+                    try:
+                        if "-" in typical_return:
+                            low, high = typical_return.replace("%", "").split("-")
+                            total_expected_low += float(low) * alloc["percent"] / 100
+                            total_expected_high += float(high) * alloc["percent"] / 100
+                        else:
+                            val = float(typical_return.replace("%", ""))
+                            total_expected_low += val * alloc["percent"] / 100
+                            total_expected_high += val * alloc["percent"] / 100
+                    except (ValueError, AttributeError):
+                        # Skip if conversion fails
+                        continue
+
+                # Show key highlights first
+                st.success(
+                    f"✅ **Confidence Level: {primary_confidence}%** - Our top recommended strategy for your profile"
+                )
+
+                col_highlight1, col_highlight2, col_highlight3 = st.columns(3)
+                with col_highlight1:
+                    st.metric("📊 Asset Classes", f"{len(primary_allocations)}")
+                with col_highlight2:
+                    st.metric(
+                        "📈 Expected Annual Return",
+                        f"{total_expected_low:.1f}% - {total_expected_high:.1f}%",
+                    )
+                with col_highlight3:
+                    st.metric(
+                        "💰 First Year Total",
+                        f"LKR {(current_savings + monthly_investable * 12):,.0f}",
+                    )
+
                 st.markdown("")
 
-                for idx, row in df_sorted.iloc[1:].iterrows():
-                    # Calculate amounts for this asset
-                    asset_amount_current = (
-                        row["Allocation (%)"] / 100
-                    ) * current_savings
-                    asset_amount_monthly = (
-                        row["Allocation (%)"] / 100
-                    ) * monthly_investable
+                # Textual breakdown of investments
+                st.markdown("### 📝 Investment Breakdown")
+                for idx, item in enumerate(primary_detail_data, 1):
+                    asset_info = item["asset_info"]
+                    alloc = item["allocation"]
 
-                    col_a, col_b, col_c = st.columns([3, 2, 2])
+                    amount_from_savings = (alloc["percent"] / 100) * current_savings
+                    amount_monthly = (alloc["percent"] / 100) * monthly_investable
 
-                    with col_a:
-                        st.markdown(
-                            f"**{row['Asset Class']}** ({row['Allocation (%)']}%)"
-                        )
-                        asset_detail = next(
-                            (
-                                item
-                                for item in detail_data
-                                if item["asset_info"]["name"] == row["Asset Class"]
-                            ),
-                            None,
-                        )
-                        if asset_detail:
-                            st.caption(asset_detail["allocation"]["reason"])
+                    # Use different colored boxes for variety
+                    if idx % 3 == 1:
+                        st.info(
+                            f"""
+**{idx}. {asset_info['name']}** - {alloc['percent']}% of portfolio
 
-                    with col_b:
-                        st.caption(
-                            f"💰 From savings: **LKR {asset_amount_current:,.0f}**"
+💰 **Investment:** LKR {amount_from_savings:,.0f} from savings{f" + LKR {amount_monthly:,.0f}/month" if monthly_investable > 0 else ""}
+
+📖 **What it is:** {asset_info['description']}
+
+💡 **Why recommend:** {alloc['reason']}
+
+🔴 **Risk:** {asset_info['risk']} | 📈 **Return:** {asset_info.get('typical_return', asset_info['return'])} | 💧 **Liquidity:** {asset_info['liquidity']}
+                        """
                         )
-                        if monthly_investable > 0:
+                    elif idx % 3 == 2:
+                        st.success(
+                            f"""
+**{idx}. {asset_info['name']}** - {alloc['percent']}% of portfolio
+
+💰 **Investment:** LKR {amount_from_savings:,.0f} from savings{f" + LKR {amount_monthly:,.0f}/month" if monthly_investable > 0 else ""}
+
+📖 **What it is:** {asset_info['description']}
+
+💡 **Why recommend:** {alloc['reason']}
+
+🔴 **Risk:** {asset_info['risk']} | 📈 **Return:** {asset_info.get('typical_return', asset_info['return'])} | 💧 **Liquidity:** {asset_info['liquidity']}
+                        """
+                        )
+                    else:
+                        st.warning(
+                            f"""
+**{idx}. {asset_info['name']}** - {alloc['percent']}% of portfolio
+
+💰 **Investment:** LKR {amount_from_savings:,.0f} from savings{f" + LKR {amount_monthly:,.0f}/month" if monthly_investable > 0 else ""}
+
+📖 **What it is:** {asset_info['description']}
+
+💡 **Why recommend:** {alloc['reason']}
+
+🔴 **Risk:** {asset_info['risk']} | 📈 **Return:** {asset_info.get('typical_return', asset_info['return'])} | 💧 **Liquidity:** {asset_info['liquidity']}
+                        """
+                        )
+
+                st.markdown("")
+
+                # Collapsible section for table and charts
+                with st.expander("📊 **View Detailed Table & Charts**", expanded=True):
+                    st.markdown("#### 💼 Asset Allocation Table")
+                    formatted_df_primary = df_primary.copy()
+                    formatted_df_primary["Amount from Savings (LKR)"] = (
+                        formatted_df_primary["Allocation (%)"].apply(
+                            lambda x: f"{(x/100 * current_savings):,.0f}"
+                        )
+                    )
+                    if monthly_investable > 0:
+                        formatted_df_primary["Monthly Investment (LKR)"] = (
+                            formatted_df_primary["Allocation (%)"].apply(
+                                lambda x: f"{(x/100 * monthly_investable):,.0f}"
+                            )
+                        )
+                    formatted_df_primary["Allocation (%)"] = formatted_df_primary[
+                        "Allocation (%)"
+                    ].apply(lambda x: f"{x}%")
+
+                    st.dataframe(
+                        formatted_df_primary, use_container_width=True, hide_index=True
+                    )
+
+                    st.markdown("")
+
+                    # Display primary plan chart
+                    col_chart, col_summary = st.columns([3, 2])
+
+                    with col_chart:
+                        st.markdown("#### 📊 Portfolio Visualization")
+                        fig_primary = px.pie(
+                            df_primary,
+                            values="Allocation (%)",
+                            names="Asset Class",
+                            title="",
+                            hole=0.4,
+                            color_discrete_sequence=px.colors.qualitative.Bold,
+                        )
+                        fig_primary.update_traces(
+                            textposition="outside",
+                            textinfo="label+percent",
+                            textfont_size=14,
+                            marker=dict(line=dict(color="white", width=2)),
+                        )
+                        fig_primary.update_layout(
+                            showlegend=False,
+                            height=450,
+                            font=dict(size=13, family="Arial"),
+                            margin=dict(t=30, b=30, l=30, r=30),
+                        )
+                        st.plotly_chart(fig_primary, use_container_width=True)
+
+                    with col_summary:
+                        st.markdown("#### 📋 Allocation Bars")
+                        for _, row in df_primary.iterrows():
+                            st.markdown(f"**{row['Asset Class']}**")
+                            st.progress(int(row["Allocation (%)"]) / 100)
                             st.caption(
-                                f"📅 Monthly: **LKR {asset_amount_monthly:,.0f}**"
+                                f"{row['Allocation (%)']}% • Risk: {row['Risk']}"
+                            )
+                            st.markdown("")
+
+                # Where to invest section
+                with st.expander(
+                    "🏦 **Where to Invest (Banks & Providers)**",
+                    expanded=False,
+                ):
+                    for idx, item in enumerate(primary_detail_data, 1):
+                        asset_info = item["asset_info"]
+                        alloc = item["allocation"]
+
+                        st.markdown(
+                            f"### {idx}. {asset_info['name']} ({alloc['percent']}%)"
+                        )
+
+                        col_a, col_b = st.columns([2, 1])
+
+                        with col_a:
+                            st.markdown(
+                                f"**📝 Description:** {asset_info['description']}"
+                            )
+                            st.markdown(f"**💡 Why:** {alloc['reason']}")
+
+                            st.markdown("**🏦 Where to Invest:**")
+                            examples = asset_info.get("examples", "")
+                            if isinstance(examples, list):
+                                for ex in examples[:5]:
+                                    st.markdown(f"- {ex}")
+                            else:
+                                st.markdown(f"- {examples}")
+
+                            # Show provider links if available
+                            provider_links = asset_info.get("provider_links", [])
+                            if provider_links:
+                                st.markdown("**🔗 Provider Links:**")
+                                for provider in provider_links[:5]:
+                                    st.markdown(
+                                        f"- [{provider['name']}]({provider['url']})"
+                                    )
+
+                        with col_b:
+                            st.metric("Risk Level", asset_info["risk"])
+                            st.metric(
+                                "Expected Return",
+                                asset_info.get("typical_return", asset_info["return"]),
+                            )
+                            st.metric("Liquidity", asset_info["liquidity"])
+                            st.metric(
+                                "Min. Investment",
+                                asset_info.get("min_investment", "N/A"),
                             )
 
-                    with col_c:
-                        st.caption(f"🔴 Risk: {row['Risk']}")
-                        st.caption(f"📈 Return: {row['Expected Return']}")
+                        if idx < len(primary_detail_data):
+                            st.markdown("---")
 
                 st.markdown("---")
+                st.markdown("")
 
-            # --- PORTFOLIO SUMMARY ---
-            st.markdown("## 📊 Complete Portfolio Overview")
+            # ========== ALTERNATIVE PLANS ==========
+            if alternative_allocations and len(alternative_allocations) > 0:
+                st.markdown("## 🔄 ALTERNATIVE INVESTMENT PLANS")
+                st.markdown(
+                    "Consider these alternative strategies based on different assumptions:"
+                )
+                st.markdown("")
+
+                for plan_idx, alt_plan in enumerate(alternative_allocations, 1):
+                    with st.expander(
+                        f"🔹 **Alternative Plan {plan_idx}** - Click to view details",
+                        expanded=False,
+                    ):
+                        # Get confidence
+                        plan_confidence = alt_plan.get("confidence", 70)
+                        st.success(
+                            f"**Confidence Level: {plan_confidence}%** - {alt_plan.get('description', 'Alternative strategy')}"
+                        )
+
+                        # Create data for this alternative plan
+                        alt_chart_data = []
+                        alt_detail_data = []
+
+                        for alloc in alt_plan.get("allocations", []):
+                            asset_class_key = alloc["asset_class"]
+                            asset_info = asset_details.get(asset_class_key, {})
+
+                            if asset_info:
+                                alt_chart_data.append(
+                                    {
+                                        "Asset Class": asset_info["name"],
+                                        "Allocation (%)": alloc["percent"],
+                                        "Risk": asset_info["risk"],
+                                        "Expected Return": asset_info.get(
+                                            "typical_return", asset_info["return"]
+                                        ),
+                                        "Liquidity": asset_info["liquidity"],
+                                    }
+                                )
+                                alt_detail_data.append(
+                                    {"asset_info": asset_info, "allocation": alloc}
+                                )
+
+                        df_alt = pd.DataFrame(alt_chart_data)
+
+                        # Calculate expected returns for this alt plan
+                        alt_expected_low = 0
+                        alt_expected_high = 0
+                        for alloc in alt_plan.get("allocations", []):
+                            asset_info = asset_details.get(alloc["asset_class"], {})
+                            typical_return = asset_info.get("typical_return", "0-0%")
+
+                            # Skip non-numeric returns
+                            if typical_return == "N/A" or not typical_return:
+                                continue
+
+                            try:
+                                if "-" in typical_return:
+                                    low, high = typical_return.replace("%", "").split(
+                                        "-"
+                                    )
+                                    alt_expected_low += (
+                                        float(low) * alloc["percent"] / 100
+                                    )
+                                    alt_expected_high += (
+                                        float(high) * alloc["percent"] / 100
+                                    )
+                                else:
+                                    val = float(typical_return.replace("%", ""))
+                                    alt_expected_low += val * alloc["percent"] / 100
+                                    alt_expected_high += val * alloc["percent"] / 100
+                            except (ValueError, AttributeError):
+                                continue
+
+                        # Key metrics for this alternative
+                        col_alt1, col_alt2, col_alt3 = st.columns(3)
+                        with col_alt1:
+                            st.metric("📊 Asset Classes", f"{len(alt_detail_data)}")
+                        with col_alt2:
+                            st.metric(
+                                "📈 Expected Return",
+                                f"{alt_expected_low:.1f}% - {alt_expected_high:.1f}%",
+                            )
+                        with col_alt3:
+                            st.metric(
+                                "💰 First Year Total",
+                                f"LKR {(current_savings + monthly_investable * 12):,.0f}",
+                            )
+
+                        st.markdown("")
+
+                        # Textual breakdown
+                        st.markdown("#### 📝 Investment Breakdown")
+                        for idx, item in enumerate(alt_detail_data, 1):
+                            asset_info = item["asset_info"]
+                            alloc = item["allocation"]
+
+                            amount_from_savings = (
+                                alloc["percent"] / 100
+                            ) * current_savings
+                            amount_monthly = (
+                                alloc["percent"] / 100
+                            ) * monthly_investable
+
+                            st.info(
+                                f"""
+**{idx}. {asset_info['name']}** - {alloc['percent']}% of portfolio
+
+💰 **Investment:** LKR {amount_from_savings:,.0f} from savings{f" + LKR {amount_monthly:,.0f}/month" if monthly_investable > 0 else ""}
+
+📖 **What it is:** {asset_info['description']}
+
+💡 **Why recommend:** {alloc['reason']}
+
+🔴 **Risk:** {asset_info['risk']} | 📈 **Return:** {asset_info.get('typical_return', asset_info['return'])} | 💧 **Liquidity:** {asset_info['liquidity']}
+                            """
+                            )
+
+                        st.markdown("")
+
+                        # Table and charts in nested expander
+                        with st.expander("📊 **View Table & Charts**", expanded=False):
+                            st.markdown("#### Asset Allocation Table")
+                            formatted_df_alt = df_alt.copy()
+                            formatted_df_alt["Amount from Savings (LKR)"] = (
+                                formatted_df_alt["Allocation (%)"].apply(
+                                    lambda x: f"{(x/100 * current_savings):,.0f}"
+                                )
+                            )
+                            if monthly_investable > 0:
+                                formatted_df_alt[
+                                    "Monthly Investment (LKR)"
+                                ] = formatted_df_alt["Allocation (%)"].apply(
+                                    lambda x: f"{(x/100 * monthly_investable):,.0f}"
+                                )
+                            formatted_df_alt["Allocation (%)"] = formatted_df_alt[
+                                "Allocation (%)"
+                            ].apply(lambda x: f"{x}%")
+
+                            st.dataframe(
+                                formatted_df_alt,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                            st.markdown("")
+
+                            # Display alternative plan chart
+                            col_alt_chart, col_alt_summary = st.columns([3, 2])
+
+                            with col_alt_chart:
+                                st.markdown("#### 📊 Portfolio Visualization")
+                                fig_alt = px.pie(
+                                    df_alt,
+                                    values="Allocation (%)",
+                                    names="Asset Class",
+                                    title="",
+                                    hole=0.4,
+                                    color_discrete_sequence=px.colors.qualitative.Pastel,
+                                )
+                                fig_alt.update_traces(
+                                    textposition="outside",
+                                    textinfo="label+percent",
+                                    textfont_size=14,
+                                    marker=dict(line=dict(color="white", width=2)),
+                                )
+                                fig_alt.update_layout(
+                                    showlegend=False,
+                                    height=400,
+                                    font=dict(size=13, family="Arial"),
+                                    margin=dict(t=30, b=30, l=30, r=30),
+                                )
+                                st.plotly_chart(fig_alt, use_container_width=True)
+
+                            with col_alt_summary:
+                                st.markdown("#### 📋 Allocation Bars")
+                                for _, row in df_alt.iterrows():
+                                    st.markdown(f"**{row['Asset Class']}**")
+                                    st.progress(int(row["Allocation (%)"]) / 100)
+                                    st.caption(
+                                        f"{row['Allocation (%)']}% • Risk: {row['Risk']}"
+                                    )
+                                    st.markdown("")
+
+                        # Provider information
+                        with st.expander("🏦 **Where to Invest**", expanded=False):
+                            for idx, item in enumerate(alt_detail_data, 1):
+                                asset_info = item["asset_info"]
+
+                                st.markdown(f"**{idx}. {asset_info['name']}**")
+
+                                examples = asset_info.get("examples", "")
+                                if isinstance(examples, list):
+                                    for ex in examples[:5]:
+                                        st.markdown(f"- {ex}")
+                                else:
+                                    st.markdown(f"- {examples}")
+
+                                provider_links = asset_info.get("provider_links", [])
+                                if provider_links:
+                                    st.markdown("**🔗 Provider Links:**")
+                                    for provider in provider_links[:5]:
+                                        st.markdown(
+                                            f"- [{provider['name']}]({provider['url']})"
+                                        )
+
+                                if idx < len(alt_detail_data):
+                                    st.markdown("---")
+
+                st.markdown("---")
+                st.markdown("")
+
+            # ========== OVERALL SUMMARY ==========
+            st.markdown("## 📊 Investment Summary")
+
+            # Calculate stats for primary plan
+            if primary_allocations:
+                df_chart = df_primary  # Use primary plan for overall metrics
+                detail_data = primary_detail_data
+            else:
+                # Fallback if no primary plan
+                chart_data = []
+                detail_data = []
+                for alloc in allocations:
+                    asset_class_key = alloc["asset_class"]
+                    asset_info = asset_details.get(asset_class_key, {})
+                    if asset_info:
+                        chart_data.append(
+                            {
+                                "Asset Class": asset_info["name"],
+                                "Allocation (%)": alloc["percent"],
+                                "Risk": asset_info["risk"],
+                                "Expected Return": asset_info.get(
+                                    "typical_return", asset_info["return"]
+                                ),
+                                "Liquidity": asset_info["liquidity"],
+                            }
+                        )
+                        detail_data.append(
+                            {"asset_info": asset_info, "allocation": alloc}
+                        )
+                df_chart = pd.DataFrame(chart_data)
 
             # Show investment summary
             st.info(
@@ -342,7 +725,10 @@ if submitted:
             col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
 
             with col_sum1:
-                st.metric("📁 Total Asset Classes", f"{len(allocations)}")
+                st.metric(
+                    "📁 Total Asset Classes",
+                    f"{len(primary_allocations) if primary_allocations else len(allocations)}",
+                )
 
             with col_sum2:
                 st.metric("⚡ Your Risk Level", risk_tolerance)
@@ -351,158 +737,37 @@ if submitted:
                 st.metric("⏰ Time Horizon", time_horizon)
 
             with col_sum4:
-                # Calculate expected return range
+                # Calculate expected return range for primary plan
                 total_expected_low = 0
                 total_expected_high = 0
-                for alloc in allocations:
+                plan_allocs = (
+                    primary_allocations if primary_allocations else allocations
+                )
+                for alloc in plan_allocs:
                     asset_info = asset_details.get(alloc["asset_class"], {})
                     typical_return = asset_info.get("typical_return", "0-0%")
 
-                    # Parse typical return (e.g., "9-11%" or "10%")
-                    if "-" in typical_return:
-                        low, high = typical_return.replace("%", "").split("-")
-                        total_expected_low += float(low) * alloc["percent"] / 100
-                        total_expected_high += float(high) * alloc["percent"] / 100
-                    else:
-                        val = float(typical_return.replace("%", ""))
-                        total_expected_low += val * alloc["percent"] / 100
-                        total_expected_high += val * alloc["percent"] / 100
+                    # Skip non-numeric returns
+                    if typical_return == "N/A" or not typical_return:
+                        continue
+
+                    try:
+                        # Parse typical return (e.g., "9-11%" or "10%")
+                        if "-" in typical_return:
+                            low, high = typical_return.replace("%", "").split("-")
+                            total_expected_low += float(low) * alloc["percent"] / 100
+                            total_expected_high += float(high) * alloc["percent"] / 100
+                        else:
+                            val = float(typical_return.replace("%", ""))
+                            total_expected_low += val * alloc["percent"] / 100
+                            total_expected_high += val * alloc["percent"] / 100
+                    except (ValueError, AttributeError):
+                        continue
 
                 st.metric(
                     "📈 Expected Return",
                     f"{total_expected_low:.1f}% - {total_expected_high:.1f}%",
                 )
-
-            st.markdown("")
-
-            # --- Display Portfolio Table (without gradient) ---
-            st.markdown("### 💼 Asset Allocation Breakdown")
-
-            # Add rupee amounts to dataframe
-            formatted_df = df_chart.copy()
-            formatted_df["Amount from Savings (LKR)"] = formatted_df[
-                "Allocation (%)"
-            ].apply(lambda x: f"{(x/100 * current_savings):,.0f}")
-            if monthly_investable > 0:
-                formatted_df["Monthly Investment (LKR)"] = formatted_df[
-                    "Allocation (%)"
-                ].apply(lambda x: f"{(x/100 * monthly_investable):,.0f}")
-            formatted_df["Allocation (%)"] = formatted_df["Allocation (%)"].apply(
-                lambda x: f"{x}%"
-            )
-
-            st.dataframe(formatted_df, use_container_width=True, hide_index=True)
-
-            st.markdown("---")
-
-            # --- Display Portfolio Visualization ---
-            col_left, col_right = st.columns([3, 2])
-
-            with col_left:
-                st.markdown("### 📊 Visual Portfolio Breakdown")
-
-                # Create better pie chart
-                fig = px.pie(
-                    df_chart,
-                    values="Allocation (%)",
-                    names="Asset Class",
-                    title="",
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.qualitative.Bold,
-                )
-                fig.update_traces(
-                    textposition="outside",
-                    textinfo="label+percent",
-                    textfont_size=14,
-                    marker=dict(line=dict(color="white", width=2)),
-                )
-                fig.update_layout(
-                    showlegend=False,
-                    height=450,
-                    font=dict(size=13, family="Arial"),
-                    margin=dict(t=30, b=30, l=30, r=30),
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            with col_right:
-                st.markdown("### 📋 Allocation Summary")
-
-                # Create allocation bars
-                for _, row in df_chart.iterrows():
-                    st.markdown(f"**{row['Asset Class']}**")
-                    st.progress(int(row["Allocation (%)"]) / 100)
-                    st.caption(
-                        f"{row['Allocation (%)']}% • Risk: {row['Risk']} • Return: {row['Expected Return']}"
-                    )
-                    st.markdown("")
-
-            st.markdown("---")
-
-            # --- Display Detailed Asset Information in Expander ---
-            with st.expander("📖 **View Detailed Asset Information**", expanded=False):
-                st.markdown("Learn more about each recommended asset class:")
-                st.markdown("")
-
-                for idx, item in enumerate(detail_data, 1):
-                    asset_info = item["asset_info"]
-                    alloc = item["allocation"]
-
-                    # Create card-like display for each asset
-                    st.markdown(
-                        f"#### {idx}. {asset_info['name']} • {alloc['percent']}%"
-                    )
-
-                    col_a, col_b = st.columns([3, 2])
-
-                    with col_a:
-                        st.markdown("**📖 What Is This?**")
-                        st.write(asset_info["description"])
-
-                        st.markdown("**📚 Investment Principle:**")
-                        st.caption(alloc["reference"])
-
-                    with col_b:
-                        # Key metrics
-                        st.markdown("**📊 Key Metrics**")
-                        m1, m2 = st.columns(2)
-                        with m1:
-                            st.metric("🔴 Risk", asset_info["risk"])
-                            st.metric("💧 Liquidity", asset_info["liquidity"])
-                        with m2:
-                            st.metric(
-                                "📈 Return",
-                                asset_info.get("typical_return", asset_info["return"]),
-                            )
-                            st.metric(
-                                "💰 Min. Investment",
-                                asset_info.get("min_investment", "Varies"),
-                            )
-
-                    # Where to invest section
-                    st.markdown("**🏦 Where to Invest:**")
-
-                    # Format examples nicely
-                    examples = asset_info.get("examples", "")
-                    if isinstance(examples, list):
-                        # Create grid for multiple examples
-                        num_examples = len(examples)
-                        if num_examples <= 3:
-                            cols = st.columns(num_examples)
-                            for i, ex in enumerate(examples):
-                                with cols[i]:
-                                    st.success(f"✅ {ex}")
-                        else:
-                            # Split into two rows
-                            ex_col1, ex_col2, ex_col3 = st.columns(3)
-                            for i, ex in enumerate(examples):
-                                target_col = [ex_col1, ex_col2, ex_col3][i % 3]
-                                with target_col:
-                                    st.success(f"✅ {ex}")
-                    else:
-                        st.success(f"✅ {examples}")
-
-                    if idx < len(detail_data):
-                        st.markdown("---")
 
             st.markdown("---")
 
@@ -542,37 +807,6 @@ if submitted:
                             st.markdown("---")
 
             st.markdown("---")
-
-            # --- Next Steps ---
-            st.subheader("✅ Next Steps")
-            st.markdown(
-                """
-            **To implement your portfolio:**
-            
-            1. **Open investment accounts** with recommended institutions
-            2. **Start with minimum investments** to understand each product
-            3. **Set up automatic monthly investments** (SIP) for unit trusts
-            4. **Review portfolio quarterly** and rebalance annually
-            5. **Consult a licensed financial advisor** for personalized guidance
-            
-            **Important Reminders:**
-            - Past performance doesn't guarantee future returns
-            - Diversification reduces but doesn't eliminate risk
-            - Keep emergency fund (6 months expenses) in liquid assets
-            - Review and adjust as your life circumstances change
-            """
-            )
-
-            # --- Disclaimer ---
-            st.markdown("---")
-            st.caption(
-                """
-            **Disclaimer:** RupeeLogic is an educational expert system for investment guidance. 
-            This is not personalized financial advice. Please consult licensed financial advisors 
-            before making investment decisions. Investment values can go down as well as up. 
-            Consider your personal circumstances and read product disclosure documents carefully.
-            """
-            )
 
         else:
             st.error(

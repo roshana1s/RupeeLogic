@@ -7,6 +7,13 @@
       "liquidity": "Very High",
       "description": "Basic savings account for emergency funds and daily liquidity needs. FDIC insured up to LKR 1,100,000 per depositor per bank.",
       "examples": "Commercial Bank Savings Plus, HNB Salary Saver, Sampath Savari, NSB Savari, People's Bank Sahana",
+      "provider_links": [
+        {"name": "Commercial Bank", "url": "https://www.combank.lk/personal-banking/savings"},
+        {"name": "Hatton National Bank (HNB)", "url": "https://www.hnb.lk/personal-banking/savings"},
+        {"name": "Sampath Bank", "url": "https://www.sampath.lk/en/personal-banking/savings"},
+        {"name": "National Savings Bank (NSB)", "url": "https://www.nsb.lk/savings-accounts"},
+        {"name": "People's Bank", "url": "https://www.peoplesbank.lk/personal/savings-accounts"}
+      ],
       "typical_return": "2-4%",
       "min_investment": "LKR 100"
     },
@@ -17,6 +24,13 @@
       "liquidity": "Low (Locked for term)",
       "description": "Guaranteed fixed returns for a specific period (1 month to 5 years). Principal protected. Best for capital preservation and short-term goals.",
       "examples": "Commercial Bank FDs (9-11%), HNB Time Deposits (9-10.5%), Sampath Bank FDs (8.5-11%), NDB Fixed Deposits (9-11%), BOC Fixed Deposits (8.5-10%)",
+      "provider_links": [
+        {"name": "Commercial Bank", "url": "https://www.combank.lk/personal-banking/deposits"},
+        {"name": "Hatton National Bank", "url": "https://www.hnb.lk/personal-banking/fixed-deposits"},
+        {"name": "Sampath Bank", "url": "https://www.sampath.lk/en/personal-banking/deposits"},
+        {"name": "NDB Bank", "url": "https://www.ndbbank.com/personal-banking/deposits"},
+        {"name": "Bank of Ceylon", "url": "https://www.boc.lk/personal-banking/deposits"}
+      ],
       "typical_return": "9-11%",
       "min_investment": "LKR 10,000"
     },
@@ -27,6 +41,12 @@
       "liquidity": "Medium",
       "description": "Short-term government securities (91, 182, 364 days). Backed by Government of Sri Lanka. Zero default risk.",
       "examples": "Available through Central Bank auctions, primary dealers (DFCC, NDB, Commercial Bank Treasury), or Unit Trust funds",
+      "provider_links": [
+        {"name": "Central Bank of Sri Lanka", "url": "https://www.cbsl.gov.lk/"},
+        {"name": "DFCC Bank (Primary Dealer)", "url": "https://www.dfcc.lk/"},
+        {"name": "NDB Bank (Primary Dealer)", "url": "https://www.ndbbank.com/"},
+        {"name": "Commercial Bank Treasury", "url": "https://www.combank.lk/corporate-banking/treasury"}
+      ],
       "typical_return": "10-12%",
       "min_investment": "LKR 100,000"
     },
@@ -37,6 +57,10 @@
       "liquidity": "Medium",
       "description": "Long-term government securities (2-30 years). Regular interest payments (semi-annual). Sovereign guarantee.",
       "examples": "Sri Lanka Development Bonds, available via EPF contributions, Unit Trusts, or directly through primary dealers",
+      "provider_links": [
+        {"name": "Central Bank of Sri Lanka", "url": "https://www.cbsl.gov.lk/"},
+        {"name": "Public Debt Department", "url": "https://www.cbsl.gov.lk/en/public-debt-department"}
+      ],
       "typical_return": "11-13%",
       "min_investment": "LKR 100,000"
     },
@@ -47,6 +71,12 @@
       "liquidity": "Medium",
       "description": "Debt issued by corporations. Higher returns than government bonds but with credit risk. Check credit ratings (ICRA, Fitch).",
       "examples": "DFCC Bank Debentures, Commercial Bank Debentures, John Keells Holdings Debentures, Hayleys Debentures, Dialog Axiata Debentures",
+      "provider_links": [
+        {"name": "Colombo Stock Exchange (Debt Market)", "url": "https://www.cse.lk/pages/debt-securities/debt-securities.component.html"},
+        {"name": "DFCC Bank", "url": "https://www.dfcc.lk/"},
+        {"name": "Commercial Bank", "url": "https://www.combank.lk/"},
+        {"name": "John Keells Holdings", "url": "https://www.keells.com/"}
+      ],
       "typical_return": "12-14%",
       "min_investment": "LKR 100,000"
     },
@@ -56,7 +86,11 @@
       "return": "Low (6-9% p.a.)",
       "liquidity": "Very High",
       "description": "Invests in short-term government securities and money market instruments. Better than savings accounts, highly liquid.",
-      "examples": "NDB Wealth Money Plus Fund, CAL Money Market Fund, Acuity Money Market Fund, Guardian Acuity Money Market Fund",
+      "examples": "NDB Wealth Money Plus Fund, Acuity Money Market Fund",
+      "provider_links": [
+        {"name": "NDB Wealth", "url": "https://www.ndbwealth.com/"},
+        {"name": "Unit Trust Association of Sri Lanka", "url": "https://www.utasl.lk/"}
+      ],
       "typical_return": "7-8%",
       "min_investment": "LKR 5,000"
     },
@@ -66,7 +100,12 @@
       "return": "Moderate (8-12% p.a.)",
       "liquidity": "High",
       "description": "Invests primarily in government bonds and high-grade corporate debt. Stable returns with capital preservation focus.",
-      "examples": "NDB Wealth Gilt Edge Fund, CAL Income Fund, Softlogic Gilt Edge Fund, Guardian Acuity Income Fund, JB Vantage Income Fund",
+      "examples": "NDB Wealth Gilt Edge Fund, Softlogic Gilt Edge Fund, JB Vantage Income Fund",
+      "provider_links": [
+        {"name": "NDB Wealth", "url": "https://www.ndbwealth.com/"},
+        {"name": "Softlogic Finance", "url": "https://www.softlogicfinance.com/"},
+        {"name": "JB Financial", "url": "https://www.jbfinance.com/"}
+      ],
       "typical_return": "9-11%",
       "min_investment": "LKR 10,000"
     },
@@ -76,7 +115,12 @@
       "return": "Moderate to High (10-18% p.a.)",
       "liquidity": "High",
       "description": "Mix of equities (30-60%) and fixed income (40-70%). Balanced risk-return profile for medium-term investors.",
-      "examples": "NDB Wealth Balanced Fund, CAL Growth & Income Fund, Softlogic Balanced Fund, Guardian Acuity Balanced Income Fund, DCSL Balanced Fund",
+      "examples": "NDB Wealth Balanced Fund, Softlogic Balanced Fund, DCSL Balanced Fund",
+      "provider_links": [
+        {"name": "NDB Wealth", "url": "https://www.ndbwealth.com/"},
+        {"name": "Softlogic Finance", "url": "https://www.softlogicfinance.com/"},
+        {"name": "DCSL", "url": "https://www.dcsl.lk/"}
+      ],
       "typical_return": "12-15%",
       "min_investment": "LKR 10,000"
     },
@@ -86,7 +130,13 @@
       "return": "High (12-25% p.a.)",
       "liquidity": "High",
       "description": "Invests primarily (80%+) in CSE-listed stocks. Professionally managed. Higher growth potential with volatility.",
-      "examples": "NDB Wealth Eagle Fund, CAL Equity Fund, Softlogic Equity Fund, Guardian Acuity Equity Fund, JB Vantage Equity Fund, DCSL Equity Fund",
+      "examples": "NDB Wealth Eagle Fund, Softlogic Equity Fund, JB Vantage Equity Fund, DCSL Equity Fund",
+      "provider_links": [
+        {"name": "NDB Wealth", "url": "https://www.ndbwealth.com/"},
+        {"name": "Softlogic Finance", "url": "https://www.softlogicfinance.com/"},
+        {"name": "JB Financial", "url": "https://www.jbfinance.com/"},
+        {"name": "DCSL", "url": "https://www.dcsl.lk/"}
+      ],
       "typical_return": "15-20%",
       "min_investment": "LKR 10,000"
     },
@@ -97,6 +147,14 @@
       "liquidity": "High",
       "description": "Large-cap, established companies on Colombo Stock Exchange. Lower risk within equity segment.",
       "examples": "John Keells Holdings (JKH), Commercial Bank (COMB), Hayleys (HAYL), Dialog Axiata (DIAL), LOLC Holdings, Sampath Bank (SAMP), Tokyo Cement",
+      "provider_links": [
+        {"name": "Colombo Stock Exchange", "url": "https://www.cse.lk/"},
+        {"name": "John Keells Holdings", "url": "https://www.keells.com/"},
+        {"name": "Commercial Bank", "url": "https://www.combank.lk/"},
+        {"name": "Hayleys Group", "url": "https://www.hayleys.com/"},
+        {"name": "Dialog Axiata", "url": "https://www.dialog.lk/"},
+        {"name": "Sampath Bank", "url": "https://www.sampath.lk/"}
+      ],
       "typical_return": "18-25%",
       "min_investment": "LKR 5,000"
     },
@@ -107,6 +165,13 @@
       "liquidity": "Medium to High",
       "description": "Mid and small-cap stocks with high growth potential. Higher volatility and risk. Requires research and monitoring.",
       "examples": "Bairaha Farms, Royal Ceramics, Access Engineering, Sunshine Holdings, Ceylon Cold Stores, Cargills Ceylon, Browns Investments",
+      "provider_links": [
+        {"name": "Colombo Stock Exchange", "url": "https://www.cse.lk/"},
+        {"name": "Bairaha Farms", "url": "https://www.bairahafarmsplc.com/"},
+        {"name": "Royal Ceramics", "url": "https://www.royalceramics.lk/"},
+        {"name": "Access Engineering", "url": "https://www.accessengineeringplc.com/"},
+        {"name": "Cargills Ceylon", "url": "https://www.cargillsceylon.com/"}
+      ],
       "typical_return": "25-40%",
       "min_investment": "LKR 2,000"
     },
@@ -117,6 +182,10 @@
       "liquidity": "Very High",
       "description": "Passively managed funds tracking market indices. Low expense ratios. Trade like stocks on CSE.",
       "examples": "Colombo Stock Exchange S&P SL20 ETF (tracks top 20 companies)",
+      "provider_links": [
+        {"name": "Colombo Stock Exchange", "url": "https://www.cse.lk/"},
+        {"name": "S&P SL20 ETF Information", "url": "https://www.cse.lk/pages/products-services/exchange-traded-funds.component.html"}
+      ],
       "typical_return": "12-18%",
       "min_investment": "LKR 5,000"
     },
@@ -127,6 +196,11 @@
       "liquidity": "Very Low",
       "description": "Property investment for rental income or capital appreciation. Illiquid but tangible asset. Consider location carefully.",
       "examples": "Residential properties (Colombo, Kandy, Galle), Commercial properties, Land banking in developing areas",
+      "provider_links": [
+        {"name": "ikman.lk Property", "url": "https://ikman.lk/en/ads/sri-lanka/property"},
+        {"name": "LankaPropertyWeb", "url": "https://www.lankapropertyweb.com/"},
+        {"name": "MyPropertyPage.lk", "url": "https://www.mypropertypage.lk/"}
+      ],
       "typical_return": "10-12%",
       "min_investment": "LKR 5,000,000+"
     },
@@ -137,6 +211,11 @@
       "liquidity": "High",
       "description": "Hedge against inflation and currency depreciation. Physical gold or gold savings accounts.",
       "examples": "Physical gold (jewelry, coins, bars), Ceylinco Gold Saver, Commercial Bank Gold Saver, HNB Gold Savings",
+      "provider_links": [
+        {"name": "Ceylinco Life Gold Saver", "url": "https://www.ceylinco.com/"},
+        {"name": "Commercial Bank Gold Saver", "url": "https://www.combank.lk/"},
+        {"name": "HNB Gold Savings", "url": "https://www.hnb.lk/"}
+      ],
       "typical_return": "8-10%",
       "min_investment": "LKR 10,000"
     },
@@ -147,8 +226,34 @@
       "liquidity": "Very Low (Locked until retirement)",
       "description": "Mandatory retirement savings for employees. EPF: 20% (12% employer, 8% employee). Tax-free returns.",
       "examples": "Employees' Provident Fund (EPF) - managed by Central Bank, Employees' Trust Fund (ETF) - 3% employer contribution",
+      "provider_links": [
+        {"name": "Central Bank of Sri Lanka - EPF", "url": "https://www.cbsl.gov.lk/en/employees-provident-fund"},
+        {"name": "ETF Board", "url": "https://www.etfb.gov.lk/"}
+      ],
       "typical_return": "10-12%",
       "min_investment": "Automatic from salary"
+    },
+    "debt_payment": {
+      "name": "Debt Payment (High-Interest)",
+      "risk": "N/A",
+      "return": "Effective 24-36% (by avoiding interest)",
+      "liquidity": "N/A",
+      "description": "Paying off high-interest debt (credit cards, personal loans) provides guaranteed returns equal to the interest rate saved.",
+      "examples": "Credit card balances, personal loans, payday loans",
+      "provider_links": [],
+      "typical_return": "24-36%",
+      "min_investment": "Minimum payment amount"
+    },
+    "budget_management": {
+      "name": "Budget Management & Expense Control",
+      "risk": "N/A",
+      "return": "Variable (savings increase)",
+      "liquidity": "N/A",
+      "description": "When expenses equal or exceed income, focus on budgeting, expense reduction, and income increase before investing.",
+      "examples": "Expense tracking apps, financial counseling, side hustles, career advancement",
+      "provider_links": [],
+      "typical_return": "N/A",
+      "min_investment": "N/A"
     }
   },
   "investment_rules": {

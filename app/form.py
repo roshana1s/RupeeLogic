@@ -31,7 +31,8 @@ st.markdown("Expert Investment Portfolio Advisor for Sri Lanka")
 st.markdown("---")
 
 # --- Main Input Form ---
-st.markdown("### � Enter Your Financial Information")
+st.markdown("### 📋 Enter Your Financial Information")
+st.info("💡 Leave fields empty to use assumptions where applicable.")
 
 with st.form("investment_form"):
     col1, col2 = st.columns(2)
@@ -42,36 +43,40 @@ with st.form("investment_form"):
             "Your Age",
             min_value=18,
             max_value=80,
-            value=30,
+            value=None,
             step=1,
-            help="Your current age",
+            help="Your current age (Default: 30 if not provided)",
+            placeholder="e.g., 30",
         )
 
         monthly_income = st.number_input(
             "Monthly Income (LKR)",
             min_value=20000,
             max_value=5000000,
-            value=150000,
+            value=None,
             step=10000,
-            help="Your monthly gross income",
+            help="Your monthly gross income (Default: 150,000 if not provided)",
+            placeholder="e.g., 150000",
         )
 
         monthly_expenses = st.number_input(
             "Monthly Expenses (LKR)",
             min_value=10000,
             max_value=1000000,
-            value=75000,
+            value=None,
             step=5000,
-            help="Average monthly living expenses",
+            help="Average monthly living expenses (Default: 75,000 if not provided)",
+            placeholder="e.g., 75000",
         )
 
         current_savings = st.number_input(
             "Current Savings (LKR)",
             min_value=0,
             max_value=100000000,
-            value=500000,
+            value=None,
             step=50000,
-            help="Total savings for investment",
+            help="Total savings for investment (Default: 500,000 if not provided)",
+            placeholder="e.g., 500000",
         )
 
         has_high_interest_debt = st.checkbox(
@@ -89,6 +94,7 @@ with st.form("investment_form"):
                 "Home Purchase",
                 "Emergency Fund",
             ],
+            help="Your primary investment goal (Default: Wealth Building)",
         )
 
         time_horizon = st.selectbox(
@@ -99,7 +105,9 @@ with st.form("investment_form"):
                 "6-10 years (Long-term)",
                 "More than 10 years (Very Long-term)",
             ],
-            index=2,
+            index=None,
+            help="How long do you plan to invest? (Default: 6-10 years if not selected)",
+            placeholder="Select timeline...",
         )
 
         # Convert time horizon to years
@@ -109,13 +117,14 @@ with st.form("investment_form"):
             "6-10 years (Long-term)": 8,
             "More than 10 years (Very Long-term)": 15,
         }
-        time_years = time_mapping[time_horizon]
+        time_years = time_mapping.get(time_horizon) if time_horizon else None
 
         risk_tolerance = st.selectbox(
             "Risk Tolerance Level",
             options=["Low", "Moderate", "High"],
-            index=1,
-            help="How comfortable are you with market fluctuations?",
+            index=None,
+            help="How comfortable are you with market fluctuations? (Default: Moderate)",
+            placeholder="Select risk level...",
         )
 
     # Submit button
@@ -123,13 +132,17 @@ with st.form("investment_form"):
         "🚀 Generate My Investment Portfolio", type="primary", use_container_width=True
     )
 
-# Display calculated emergency fund status
-emergency_fund_needed = monthly_expenses * 6
-emergency_fund_status = (
-    (current_savings / emergency_fund_needed * 100)
-    if emergency_fund_needed > 0
-    else 100
-)
+# Display calculated emergency fund status (only if monthly_expenses is provided)
+if monthly_expenses is not None:
+    emergency_fund_needed = monthly_expenses * 6
+    emergency_fund_status = (
+        (current_savings / emergency_fund_needed * 100)
+        if emergency_fund_needed > 0 and current_savings is not None
+        else 0
+    )
+else:
+    emergency_fund_needed = 0
+    emergency_fund_status = 0
 
 if submitted:
 
@@ -137,22 +150,74 @@ if submitted:
         "Analyzing your financial profile and generating recommendations..."
     ):
 
+        # ====== BACKEND DEFAULT VALUES ======
+        # Apply defaults for any fields the user didn't fill
+        DEFAULT_AGE = 30
+        DEFAULT_MONTHLY_INCOME = 150000
+        DEFAULT_MONTHLY_EXPENSES = 75000
+        DEFAULT_CURRENT_SAVINGS = 500000
+        DEFAULT_GOAL_TYPE = "Wealth Building"
+        DEFAULT_TIME_YEARS = 8  # 6-10 years
+        DEFAULT_RISK_TOLERANCE = "Moderate"
+
+        # Apply defaults where user input is None
+        final_age = age if age is not None else DEFAULT_AGE
+        final_monthly_income = (
+            monthly_income if monthly_income is not None else DEFAULT_MONTHLY_INCOME
+        )
+        final_monthly_expenses = (
+            monthly_expenses
+            if monthly_expenses is not None
+            else DEFAULT_MONTHLY_EXPENSES
+        )
+        final_current_savings = (
+            current_savings if current_savings is not None else DEFAULT_CURRENT_SAVINGS
+        )
+        final_goal_type = goal_type if goal_type else DEFAULT_GOAL_TYPE
+        final_time_years = time_years if time_years is not None else DEFAULT_TIME_YEARS
+        final_risk_tolerance = (
+            risk_tolerance if risk_tolerance else DEFAULT_RISK_TOLERANCE
+        )
+
+        # Track which defaults were used for display
+        defaults_used = []
+        if age is None:
+            defaults_used.append(f"Age: {DEFAULT_AGE}")
+        if monthly_income is None:
+            defaults_used.append(f"Monthly Income: LKR {DEFAULT_MONTHLY_INCOME:,}")
+        if monthly_expenses is None:
+            defaults_used.append(f"Monthly Expenses: LKR {DEFAULT_MONTHLY_EXPENSES:,}")
+        if current_savings is None:
+            defaults_used.append(f"Current Savings: LKR {DEFAULT_CURRENT_SAVINGS:,}")
+        if not goal_type:
+            defaults_used.append(f"Goal: {DEFAULT_GOAL_TYPE}")
+        if time_years is None:
+            defaults_used.append(f"Timeline: 6-10 years")
+        if not risk_tolerance:
+            defaults_used.append(f"Risk Tolerance: {DEFAULT_RISK_TOLERANCE}")
+
+        # Show which defaults were applied
+        if defaults_used:
+            st.info(f"**ℹ️ Default values applied for:** {', '.join(defaults_used)}")
+
         # 1. Initialize Engine
         engine = RupeeLogicEngine()
         engine.reset()
 
-        # 2. Declare User Facts
+        # 2. Declare User Facts (using final values with defaults applied)
         engine.declare(
             UserProfile(
-                age=age,
-                monthly_income=monthly_income,
-                monthly_expenses=monthly_expenses,
-                current_savings=current_savings,
+                age=final_age,
+                monthly_income=final_monthly_income,
+                monthly_expenses=final_monthly_expenses,
+                current_savings=final_current_savings,
                 has_high_interest_debt=has_high_interest_debt,
-                risk_tolerance=risk_tolerance,
+                risk_tolerance=final_risk_tolerance,
             )
         )
-        engine.declare(InvestmentGoal(goal_type=goal_type, time_horizon=time_years))
+        engine.declare(
+            InvestmentGoal(goal_type=final_goal_type, time_horizon=final_time_years)
+        )
 
         # 3. Run Engine
         engine.run()
@@ -194,8 +259,13 @@ if submitted:
                 a for a in allocations if a.get("plan_type") == "primary"
             ]
 
-            # Calculate monthly investment amount
-            monthly_investable = monthly_income - monthly_expenses
+            # Calculate monthly investment amount using final values
+            monthly_investable = final_monthly_income - final_monthly_expenses
+
+            # Determine display values for time horizon
+            time_horizon_display = (
+                time_horizon if time_horizon else "6-10 years (Long-term)"
+            )
 
             # ========== INVESTMENT OVERVIEW ==========
             st.markdown("## 💼 Your Investment Overview")
@@ -203,16 +273,16 @@ if submitted:
             col_overview1, col_overview2, col_overview3 = st.columns(3)
 
             with col_overview1:
-                st.metric("💰 Current Savings", f"LKR {current_savings:,.0f}")
+                st.metric("💰 Current Savings", f"LKR {final_current_savings:,.0f}")
                 st.metric("📅 Monthly Investable", f"LKR {monthly_investable:,.0f}")
 
             with col_overview2:
-                st.metric("⚡ Risk Tolerance", risk_tolerance)
-                st.metric("🎯 Investment Goal", goal_type)
+                st.metric("⚡ Risk Tolerance", final_risk_tolerance)
+                st.metric("🎯 Investment Goal", final_goal_type)
 
             with col_overview3:
-                st.metric("⏰ Time Horizon", time_horizon)
-                st.metric("🔢 Your Age", f"{age} years")
+                st.metric("⏰ Time Horizon", time_horizon_display)
+                st.metric("🔢 Your Age", f"{final_age} years")
 
             st.markdown("---")
 
@@ -289,7 +359,7 @@ if submitted:
                 with col_highlight3:
                     st.metric(
                         "💰 First Year Total",
-                        f"LKR {(current_savings + monthly_investable * 12):,.0f}",
+                        f"LKR {(final_current_savings + monthly_investable * 12):,.0f}",
                     )
 
                 st.markdown("")
@@ -300,7 +370,9 @@ if submitted:
                     asset_info = item["asset_info"]
                     alloc = item["allocation"]
 
-                    amount_from_savings = (alloc["percent"] / 100) * current_savings
+                    amount_from_savings = (
+                        alloc["percent"] / 100
+                    ) * final_current_savings
                     amount_monthly = (alloc["percent"] / 100) * monthly_investable
 
                     # Use different colored boxes for variety
@@ -355,7 +427,7 @@ if submitted:
                     formatted_df_primary = df_primary.copy()
                     formatted_df_primary["Amount from Savings (LKR)"] = (
                         formatted_df_primary["Allocation (%)"].apply(
-                            lambda x: f"{(x/100 * current_savings):,.0f}"
+                            lambda x: f"{(x/100 * final_current_savings):,.0f}"
                         )
                     )
                     if monthly_investable > 0:
@@ -553,7 +625,7 @@ if submitted:
                         with col_alt3:
                             st.metric(
                                 "💰 First Year Total",
-                                f"LKR {(current_savings + monthly_investable * 12):,.0f}",
+                                f"LKR {(final_current_savings + monthly_investable * 12):,.0f}",
                             )
 
                         st.markdown("")
@@ -566,7 +638,7 @@ if submitted:
 
                             amount_from_savings = (
                                 alloc["percent"] / 100
-                            ) * current_savings
+                            ) * final_current_savings
                             amount_monthly = (
                                 alloc["percent"] / 100
                             ) * monthly_investable
@@ -593,7 +665,7 @@ if submitted:
                             formatted_df_alt = df_alt.copy()
                             formatted_df_alt["Amount from Savings (LKR)"] = (
                                 formatted_df_alt["Allocation (%)"].apply(
-                                    lambda x: f"{(x/100 * current_savings):,.0f}"
+                                    lambda x: f"{(x/100 * final_current_savings):,.0f}"
                                 )
                             )
                             if monthly_investable > 0:
@@ -714,9 +786,9 @@ if submitted:
             st.info(
                 f"""
             **💼 Your Investment Plan:**
-            - 💰 **One-time Investment:** LKR {current_savings:,.0f} from current savings
-            - 📅 **Monthly Investment:** LKR {monthly_investable:,.0f} ({monthly_income:,.0f} income - {monthly_expenses:,.0f} expenses)
-            - 📈 **Total First Year:** LKR {(current_savings + (monthly_investable * 12)):,.0f}
+            - 💰 **One-time Investment:** LKR {final_current_savings:,.0f} from current savings
+            - 📅 **Monthly Investment:** LKR {monthly_investable:,.0f} ({final_monthly_income:,.0f} income - {final_monthly_expenses:,.0f} expenses)
+            - 📈 **Total First Year:** LKR {(final_current_savings + (monthly_investable * 12)):,.0f}
             """
             )
 
@@ -731,10 +803,10 @@ if submitted:
                 )
 
             with col_sum2:
-                st.metric("⚡ Your Risk Level", risk_tolerance)
+                st.metric("⚡ Your Risk Level", final_risk_tolerance)
 
             with col_sum3:
-                st.metric("⏰ Time Horizon", time_horizon)
+                st.metric("⏰ Time Horizon", time_horizon_display)
 
             with col_sum4:
                 # Calculate expected return range for primary plan

@@ -47,13 +47,26 @@ git clone https://github.com/roshana1s/RupeeLogic.git
 cd RupeeLogic
 ```
 
-2. **Install dependencies**
+2. **Create and activate virtual environment**
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows:
+venv\Scripts\activate
+
+# On macOS/Linux:
+source venv/bin/activate
+```
+
+3. **Install dependencies**
 ```bash
 pip install -r requirements.txt --no-deps
 ```
 > **Note**: The `--no-deps` flag is used to avoid dependency conflicts. All required packages are specified in `requirements.txt`.
 
-3. **Set up environment variables** (Optional - only for Chat Mode)
+4. **Set up environment variables** (Optional - only for Chat Mode)
 ```bash
 # Copy the example environment file
 copy .env.example .env
@@ -129,7 +142,7 @@ RupeeLogic/
 
 ## 📊 Investment Rules Coverage
 
-The expert system includes 23+ rules covering:
+The expert system includes 20+ rules covering:
 
 - ✅ Emergency fund prioritization
 - ✅ High-interest debt payoff strategies

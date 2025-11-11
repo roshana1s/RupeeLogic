@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 
-from es.es import RupeeLogicEngine, UserProfile, InvestmentGoal, Allocation
+from es.RupeeLogicEngine import RupeeLogicEngine, UserProfile, InvestmentGoal, Allocation
 from core.config import config
 
 # Page configuration

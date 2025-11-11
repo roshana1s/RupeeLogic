@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import plotly.express as px
 
-from es.es import RupeeLogicEngine, UserProfile, InvestmentGoal, Allocation
+from es.RupeeLogicEngine import RupeeLogicEngine, UserProfile, InvestmentGoal, Allocation
 
 # Set page config
 st.set_page_config(

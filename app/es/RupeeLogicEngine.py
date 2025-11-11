@@ -1,40 +1,31 @@
 from experta import *
 import json
 
-
-# --- Fact Definitions ---
+# Fact Definitions
 class UserProfile(Fact):
     """Holds all user profile data."""
-
     pass
-
 
 class InvestmentGoal(Fact):
     """Holds all user goal data."""
-
     pass
-
 
 class Allocation(Fact):
     """A final recommendation fact. The UI will read these."""
-
     pass
-
 
 class AlternativeAllocation(Fact):
     """Alternative investment plan recommendations."""
-
     pass
 
 
-# --- The Knowledge Engine ---
+# The Knowledge Engine
 class RupeeLogicEngine(KnowledgeEngine):
 
     def __init__(self):
         """Initialize the engine and tracking for fired rules."""
         super().__init__()
         self.fired_rules = []  # Track which rules were fired
-        self.primary_plan_confidence = 85  # Default confidence for primary plan
         self.alternative_plans = []  # Track alternative plans
 
     @DefFacts()
@@ -51,8 +42,7 @@ class RupeeLogicEngine(KnowledgeEngine):
 
     def calculate_bayesian_confidence(self, user_profile, rule_conditions):
         """
-        Calculate confidence using Bayesian probability
-        P(Rule is correct | User Profile)
+        Simple method to Calculate confidence using identified user inputs
         """
         base_confidence = 0.5  # Prior probability
 
@@ -87,7 +77,6 @@ class RupeeLogicEngine(KnowledgeEngine):
         if rule_conditions.get("goal_type") == user_profile.get("goal_type"):
             evidence_scores.append(0.2)  # 20% weight
 
-        # Bayesian update: P(H|E) = P(E|H) * P(H) / P(E)
         # Simplified: Combine evidence with base confidence
         confidence = base_confidence + sum(evidence_scores)
 
@@ -97,17 +86,6 @@ class RupeeLogicEngine(KnowledgeEngine):
         """Extract user profile and goal data from declared facts"""
         user_data = {}
         goal_data = {}
-
-        # Goal type mapper: Frontend values → Rule condition values
-        goal_mapper = {
-            "Wealth Building": "Wealth Building",
-            "Retirement": "Retirement",
-            "Child Education": "Education",
-            "Home Purchase": "Home Purchase",
-            "Emergency Fund": "emergency_fund",
-            "Savings": "savings",
-            "Other": "other",
-        }
 
         for fact in self.facts.values():
             # Get UserProfile data
@@ -123,8 +101,7 @@ class RupeeLogicEngine(KnowledgeEngine):
             if fact.get("__factid__") and "time_horizon" in fact:
                 goal_data["time_horizon"] = fact.get("time_horizon")
                 # Map frontend goal type to internal goal type
-                raw_goal = fact.get("goal_type")
-                goal_data["goal_type"] = goal_mapper.get(raw_goal, raw_goal)
+                goal_data["goal_type"] = fact.get("goal_type")
 
         # Merge goal data into user data
         user_data.update(goal_data)
@@ -151,7 +128,7 @@ class RupeeLogicEngine(KnowledgeEngine):
         # Get user profile data and calculate confidence
         user_profile = self.get_user_profile_data()
         rule_conditions = {
-            "goal_type": "emergency_fund"  # This rule is specifically for emergency fund building
+            "goal_type": "Emergency Fund"  # This rule is specifically for emergency fund building
         }
         primary_confidence = self.calculate_bayesian_confidence(
             user_profile, rule_conditions
@@ -345,7 +322,7 @@ class RupeeLogicEngine(KnowledgeEngine):
         # Get user profile data and calculate confidence
         user_profile = self.get_user_profile_data()
         rule_conditions = {
-            "goal_type": "savings"  # This rule is for basic savings building
+            "goal_type": "Savings"  # This rule is for basic savings building
         }
         confidence = self.calculate_bayesian_confidence(user_profile, rule_conditions)
 

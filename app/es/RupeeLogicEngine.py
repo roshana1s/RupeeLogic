@@ -1,0 +1,2269 @@
+from experta import *
+import json
+
+# Fact Definitions
+class UserProfile(Fact):
+    """Holds all user profile data."""
+    pass
+
+class InvestmentGoal(Fact):
+    """Holds all user goal data."""
+    pass
+
+class Allocation(Fact):
+    """A final recommendation fact. The UI will read these."""
+    pass
+
+class AlternativeAllocation(Fact):
+    """Alternative investment plan recommendations."""
+    pass
+
+
+# The Knowledge Engine
+class RupeeLogicEngine(KnowledgeEngine):
+
+    def __init__(self):
+        """Initialize the engine and tracking for fired rules."""
+        super().__init__()
+        self.fired_rules = []  # Track which rules were fired
+        self.alternative_plans = []  # Track alternative plans
+
+    @DefFacts()
+    def _initial_facts(self):
+        """Load the asset class knowledge base as facts."""
+        with open("app/data/knowledge_base.json", "r") as f:
+            kb = json.load(f)
+
+        for asset, details in kb["asset_classes"].items():
+            yield Fact(asset_class=asset, **details)
+
+        # This fact signals the engine to start.
+        yield Fact(run_analysis=True)
+
+    def calculate_bayesian_confidence(self, user_profile, rule_conditions):
+        """
+        Simple method to Calculate confidence using identified user inputs
+        """
+        base_confidence = 0.5  # Prior probability
+
+        # Evidence weights
+        evidence_scores = []
+
+        # Age match score
+        if "age_range" in rule_conditions:
+            min_age, max_age = rule_conditions["age_range"]
+            age = user_profile["age"]
+            if min_age <= age <= max_age:
+                # Perfect match in middle of range
+                age_center = (min_age + max_age) / 2
+                age_match = 1 - abs(age - age_center) / (max_age - min_age)
+                evidence_scores.append(age_match * 0.3)  # 30% weight
+
+        # Risk tolerance exact match
+        if rule_conditions.get("risk_tolerance") == user_profile.get("risk_tolerance"):
+            evidence_scores.append(0.25)  # 25% weight
+
+        # Time horizon match
+        if "time_horizon_min" in rule_conditions:
+            min_horizon = rule_conditions["time_horizon_min"]
+            if min_horizon > 0 and user_profile["time_horizon"] >= min_horizon:
+                horizon_score = min(user_profile["time_horizon"] / min_horizon, 1.0)
+                evidence_scores.append(horizon_score * 0.25)  # 25% weight
+            elif min_horizon == 0:
+                # For rules with no minimum time horizon (like short-term goals)
+                evidence_scores.append(0.25)  # Full weight since any horizon qualifies
+
+        # Goal alignment
+        if rule_conditions.get("goal_type") == user_profile.get("goal_type"):
+            evidence_scores.append(0.2)  # 20% weight
+
+        # Simplified: Combine evidence with base confidence
+        confidence = base_confidence + sum(evidence_scores)
+
+        return min(max(confidence * 100, 50), 95)  # Clamp between 50-95%
+
+    def get_user_profile_data(self):
+        """Extract user profile and goal data from declared facts"""
+        user_data = {}
+        goal_data = {}
+
+        for fact in self.facts.values():
+            # Get UserProfile data
+            if fact.get("__factid__") and "age" in fact:
+                user_data["age"] = fact.get("age")
+                user_data["monthly_income"] = fact.get("monthly_income")
+                user_data["monthly_expenses"] = fact.get("monthly_expenses")
+                user_data["current_savings"] = fact.get("current_savings")
+                user_data["has_high_interest_debt"] = fact.get("has_high_interest_debt")
+                user_data["risk_tolerance"] = fact.get("risk_tolerance")
+
+            # Get InvestmentGoal data
+            if fact.get("__factid__") and "time_horizon" in fact:
+                goal_data["time_horizon"] = fact.get("time_horizon")
+                # Map frontend goal type to internal goal type
+                goal_data["goal_type"] = fact.get("goal_type")
+
+        # Merge goal data into user data
+        user_data.update(goal_data)
+        print(user_data)
+        return user_data
+
+    # ==================================================================================
+    # PHASE 1: CRITICAL FINANCIAL PRIORITIES (Highest Salience)
+    # Rules: Emergency Fund & High-Interest Debt
+    # ==================================================================================
+
+    @Rule(
+        UserProfile(monthly_expenses=MATCH.exp, current_savings=MATCH.sav),
+        TEST(lambda exp, sav: sav < (exp * 6)),
+        salience=100,
+    )
+    def rule_emergency_fund_priority(self):
+        """
+        RULE 1: Emergency Fund First
+        Source: Financial Planning Standards - 6 months expenses recommended
+        If savings < 6 months of expenses, prioritize building emergency fund
+        Reference: https://www.investopedia.com/terms/e/emergency_fund.asp
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "goal_type": "Emergency Fund"  # This rule is specifically for emergency fund building
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(
+            primary_confidence - 15, 50
+        )  # Alternative plans have lower confidence
+        alt2_confidence = max(primary_confidence - 20, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 1",
+                "rule_name": "Emergency Fund Priority",
+                "salience": 100,
+                "confidence": round(primary_confidence),
+                "description": "Build 6-month emergency fund before investing",
+                "condition": "Current savings < 6 months of monthly expenses",
+                "action": "Primary Plan: 50% Savings Account + 50% Money Market Funds",
+            }
+        )
+
+        # PRIMARY PLAN (dynamic confidence)
+        self.declare(
+            Allocation(
+                asset_class="savings_account",
+                percent=50,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Build a 6-month emergency fund first for financial security and unexpected expenses.",
+                reference="Financial planning best practice: 6 months expenses in liquid savings - Dave Ramsey, Total Money Makeover",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=50,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Higher returns than savings account while maintaining high liquidity for emergencies.",
+                reference="Money market funds provide 7-8% returns vs 2-4% in savings accounts",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - More conservative
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Maximum Liquidity",
+                "confidence": round(alt1_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "savings_account",
+                        "percent": 80,
+                        "reason": "Prioritize immediate access to emergency funds over returns.",
+                        "reference": "Ultra-safe approach for risk-averse individuals",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 20,
+                        "reason": "Small allocation for slightly better returns while keeping most in instant-access savings.",
+                        "reference": "Recommended by conservative financial planners",
+                    },
+                ],
+            }
+        )
+
+        # ALTERNATIVE PLAN 2 (dynamic confidence) - More aggressive returns
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 2: Enhanced Returns",
+                "confidence": round(alt2_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "savings_account",
+                        "percent": 30,
+                        "reason": "Minimum emergency cash for 1-2 months immediate expenses.",
+                        "reference": "Tiered emergency fund approach",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 40,
+                        "reason": "Core emergency fund with better returns and T+1 liquidity.",
+                        "reference": "Money market funds average 7-8% in Sri Lanka",
+                    },
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 30,
+                        "reason": "Highest returns (9-11%) with 14-day withdrawal option for portion of emergency fund.",
+                        "reference": "Commercial banks offer FD withdrawals with minimal penalty",
+                    },
+                ],
+            }
+        )
+
+    @Rule(UserProfile(has_high_interest_debt=True), salience=95)
+    def rule_debt_payoff_priority(self):
+        """
+        RULE 2: Pay Off High-Interest Debt First
+        Source: Credit card rates in Sri Lanka: 24-36% p.a.
+        Investment returns rarely beat credit card interest
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "goal_type": "debt_payoff"  # This rule is specifically for debt elimination
+        }
+        confidence = self.calculate_bayesian_confidence(user_profile, rule_conditions)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 2",
+                "rule_name": "Debt Payoff Priority",
+                "salience": 95,
+                "confidence": round(confidence),
+                "description": "Pay off high-interest debt before investing",
+                "condition": "Has high-interest debt (credit cards, personal loans)",
+                "action": "Recommend 100% debt payment before any investments",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="debt_payment",
+                percent=100,
+                plan_type="primary",
+                confidence=round(confidence),
+                reason="Pay off high-interest debt (credit cards: 24-36% p.a.) before investing. No investment consistently beats these rates.",
+                reference="Sri Lankan credit card APR: 24-36% annually - Source: CBSL Financial Reports",
+            )
+        )
+
+    @Rule(
+        UserProfile(monthly_income=MATCH.inc, monthly_expenses=MATCH.exp),
+        TEST(lambda inc, exp: exp >= inc),
+        salience=98,
+    )
+    def rule_expenses_exceed_income(self):
+        """
+        RULE 2A: Expenses Equal or Exceed Income - CRITICAL
+        Edge case: Living beyond means
+        Focus on expense reduction and income increase
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "goal_type": "budget_management"  # This rule is for budget crisis scenarios
+        }
+        confidence = self.calculate_bayesian_confidence(user_profile, rule_conditions)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 2A",
+                "rule_name": "Expenses Exceed Income - Budget Crisis",
+                "salience": 98,
+                "confidence": round(confidence),
+                "description": "Expenses >= Income - Focus on budgeting first",
+                "condition": "Monthly expenses >= Monthly income",
+                "action": "PRIORITY: Reduce expenses or increase income before investing",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="budget_management",
+                percent=100,
+                plan_type="primary",
+                confidence=round(confidence),
+                reason="⚠️ CRITICAL: Your monthly expenses equal or exceed your income. You cannot invest sustainably in this situation. Focus on: 1) Reducing discretionary expenses, 2) Increasing income through side hustles or career advancement, 3) Building a basic emergency fund from current savings.",
+                reference="Financial Planning 101: Income must exceed expenses for sustainable investing - Dave Ramsey Total Money Makeover",
+            )
+        )
+
+    @Rule(
+        UserProfile(
+            monthly_income=MATCH.inc,
+            monthly_expenses=MATCH.exp,
+            current_savings=MATCH.sav,
+        ),
+        TEST(
+            lambda inc, exp, sav: (inc - exp) > 0
+            and (inc - exp) < 10000
+            and sav < 100000
+        ),
+        salience=97,
+    )
+    def rule_very_low_investable_amount(self):
+        """
+        RULE 2B: Very Low Investable Amount
+        Edge case: Monthly surplus < LKR 10,000 and low savings
+        Focus on building emergency fund first
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "goal_type": "Savings"  # This rule is for basic savings building
+        }
+        confidence = self.calculate_bayesian_confidence(user_profile, rule_conditions)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 2B",
+                "rule_name": "Very Low Investable Amount",
+                "salience": 97,
+                "confidence": round(confidence),
+                "description": "Monthly surplus < LKR 10,000 - Build foundation first",
+                "condition": "Monthly investable < 10,000 AND Current savings < 100,000",
+                "action": "100% savings account to build emergency fund",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="savings_account",
+                percent=100,
+                plan_type="primary",
+                confidence=round(confidence),
+                reason="With limited monthly surplus (< LKR 10,000) and low savings, focus 100% on building a cash emergency fund first. Most investments require minimum amounts of LKR 10,000-50,000.",
+                reference="Build LKR 100,000+ emergency fund before diversifying - minimum for most unit trusts",
+            )
+        )
+
+    # ==================================================================================
+    # PHASE 2: SHORT-TERM GOALS (< 3 years) - Capital Preservation
+    # ==================================================================================
+
+    @Rule(
+        NOT(Allocation()),
+        InvestmentGoal(time_horizon=P(lambda x: x < 3)),
+        salience=80,
+    )
+    def rule_short_term_goal(self):
+        """
+        RULE 3: Short-term goals require capital preservation
+        Source: Investment horizon principle - volatility risk for short periods
+        For goals < 3 years: No equity exposure, focus on guaranteed returns
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "time_horizon_min": 0,  # Short-term: less than 3 years
+            "goal_type": user_profile.get("goal_type", "savings"),
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 7, 50)
+        alt2_confidence = max(primary_confidence - 5, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 3",
+                "rule_name": "Short-Term Goal (< 3 years)",
+                "salience": 80,
+                "confidence": round(primary_confidence),
+                "description": "Capital preservation for short-term goals",
+                "condition": "Time horizon less than 3 years",
+                "action": "Allocate 70% Fixed Deposits + 30% Treasury Bills (no equity exposure)",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="fixed_deposits",
+                percent=70,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Short-term goal requires guaranteed returns. FDs offer 9-11% p.a. with zero risk.",
+                reference="Average FD rates in Sri Lanka: 9-11% p.a. (Commercial Bank, HNB, Sampath)",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="treasury_bills",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Government T-Bills provide secure short-term returns with sovereign guarantee.",
+                reference="T-Bill rates: 10-12% p.a. - Central Bank of Sri Lanka primary auctions",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Maximum Safety
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: 100% Bank Deposits",
+                "confidence": round(alt1_confidence),
+                "description": "Maximum safety with bank deposits only",
+                "allocations": [
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 100,
+                        "reason": "All funds in guaranteed fixed deposits for absolute certainty.",
+                        "reference": "Zero risk approach for very conservative short-term goals",
+                    },
+                ],
+            }
+        )
+
+        # ALTERNATIVE PLAN 2 (dynamic confidence) - Government Focus
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 2: Government Securities",
+                "confidence": round(alt2_confidence),
+                "description": "Focus on government-backed securities",
+                "allocations": [
+                    {
+                        "asset_class": "treasury_bills",
+                        "percent": 60,
+                        "reason": "Sovereign guarantee with better liquidity than FDs.",
+                        "reference": "T-Bills can be sold in secondary market if needed",
+                    },
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 40,
+                        "reason": "Bank deposits for portion requiring absolute guarantee.",
+                        "reference": "Mix of government and bank securities",
+                    },
+                ],
+            }
+        )
+
+    # ==================================================================================
+    # PHASE 3: RETIREMENT PLANNING (Age-based)
+    # ==================================================================================
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: x >= 55)),
+        InvestmentGoal(goal_type="Retirement"),
+        salience=75,
+    )
+    def rule_near_retirement(self):
+        """
+        RULE 4: Near/In Retirement - Conservative Allocation
+        Source: Age-based asset allocation - Preserve capital, generate income
+        Formula: Equity % = 100 - Age (Conservative Sri Lankan: 80 - Age)
+        Age 55+: Maximum 25% equity exposure
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (55, 100),  # Near/in retirement age
+            "goal_type": "Retirement",
+            "risk_tolerance": "Low",  # Conservative for this age
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 8, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 4",
+                "rule_name": "Near Retirement Conservative",
+                "salience": 75,
+                "confidence": round(primary_confidence),
+                "description": "Conservative portfolio for near-retirement age",
+                "condition": "Age ≥ 55 years AND Goal = Retirement",
+                "action": "Allocate 90% fixed income (FD, Bonds, Income Funds) + 10% blue chip stocks",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="fixed_deposits",
+                percent=40,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Capital preservation is critical near retirement. Guaranteed 9-11% annual returns.",
+                reference="Conservative allocation for age 55+: 70-80% fixed income",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="government_bonds",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Long-term government bonds provide stable income with sovereign backing.",
+                reference="Sri Lanka Development Bonds: 11-13% p.a. returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Professional bond fund management with better diversification than individual bonds.",
+                reference="NDB Gilt Edge Fund, CAL Income Fund - typical returns 9-11%",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="cse_blue_chip_stocks",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Small equity allocation for inflation protection through dividend-paying blue chips.",
+                reference="Blue chip dividends: JKH, COMB, SAMP provide 3-5% dividend yields",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Income Focus
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Maximum Income",
+                "confidence": round(alt1_confidence),
+                "description": "Focus on income generation in retirement",
+                "allocations": [
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 35,
+                        "reason": "Maximum income from bond funds.",
+                        "reference": "Steady monthly income stream",
+                    },
+                    {
+                        "asset_class": "government_bonds",
+                        "percent": 30,
+                        "reason": "Government securities for stable income.",
+                        "reference": "11-13% p.a. guaranteed",
+                    },
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 25,
+                        "reason": "Guaranteed fixed deposits.",
+                        "reference": "9-11% safe returns",
+                    },
+                    {
+                        "asset_class": "cse_blue_chip_stocks",
+                        "percent": 10,
+                        "reason": "Dividend income from blue chips.",
+                        "reference": "3-5% dividend yield",
+                    },
+                ],
+            }
+        )
+
+    # ==================================================================================
+    # PHASE 4: AGGRESSIVE GROWTH (Young + High Risk + Long Term)
+    # ==================================================================================
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: x < 35), risk_tolerance="High"),
+        InvestmentGoal(time_horizon=P(lambda x: x >= 10)),
+        salience=70,
+    )
+    def rule_aggressive_growth(self):
+        """
+        RULE 5: Aggressive Growth Portfolio
+        Source: Modern Portfolio Theory - Young investors can tolerate volatility
+        Age < 35 + High Risk + 10+ years = Maximum equity exposure
+        Expected return: 18-25% p.a. with high volatility
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (18, 34),  # Young investors
+            "risk_tolerance": "High",
+            "time_horizon_min": 10,
+            "goal_type": "Wealth Building",  # Match mapped frontend value
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 8, 50)
+        alt2_confidence = max(primary_confidence - 3, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 5",
+                "rule_name": "Aggressive Growth Portfolio",
+                "salience": 70,
+                "confidence": round(primary_confidence),
+                "description": "Maximum equity exposure for young risk-takers",
+                "condition": "Age < 35 AND Risk Tolerance = High AND Time Horizon ≥ 10 years",
+                "action": "Allocate 75% equities (35% Equity Funds + 25% Blue Chips + 15% Growth Stocks) + 25% balanced/income",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=35,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Professional equity fund management provides diversification across CSE sectors.",
+                reference="NDB Eagle Fund, CAL Equity Fund - historical returns: 15-20% p.a.",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="cse_blue_chip_stocks",
+                percent=25,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Direct investment in established companies (JKH, COMB, Dialog) for capital appreciation.",
+                reference="CSE blue chips average return: 18-25% p.a. over 10+ years",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="cse_growth_stocks",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="High-growth mid-cap stocks offer superior returns for risk-tolerant long-term investors.",
+                reference="Growth stocks (Bairaha, Royal Ceramics): 25-40% potential returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Balanced funds provide automatic rebalancing between stocks and bonds.",
+                reference="NDB Balanced Fund, CAL Growth & Income - typical returns: 12-15%",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income component for portfolio stability during market downturns.",
+                reference="Bond funds provide 9-11% stable returns as portfolio anchor",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Maximum Aggression
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Ultra-Aggressive Growth",
+                "confidence": round(alt1_confidence),
+                "description": "Maximum equity exposure for highest growth potential",
+                "allocations": [
+                    {
+                        "asset_class": "cse_growth_stocks",
+                        "percent": 40,
+                        "reason": "Maximum growth stock exposure for long-term wealth building.",
+                        "reference": "High-growth stocks can deliver 30-50% returns",
+                    },
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 35,
+                        "reason": "Professional diversification across sectors.",
+                        "reference": "Equity funds for broad market exposure",
+                    },
+                    {
+                        "asset_class": "cse_blue_chip_stocks",
+                        "percent": 25,
+                        "reason": "Blue chips for dividend income and stability.",
+                        "reference": "Balance growth with quality companies",
+                    },
+                ],
+            }
+        )
+
+        # ALTERNATIVE PLAN 2 (dynamic confidence) - Diversified Growth
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 2: Balanced Aggression",
+                "confidence": round(alt2_confidence),
+                "description": "Aggressive but more diversified approach",
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 45,
+                        "reason": "Core equity through professional management.",
+                        "reference": "Let experts handle stock selection",
+                    },
+                    {
+                        "asset_class": "cse_blue_chip_stocks",
+                        "percent": 30,
+                        "reason": "Direct ownership of top companies.",
+                        "reference": "JKH, COMB, Dialog for long-term",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 15,
+                        "reason": "Some balanced exposure for automatic rebalancing.",
+                        "reference": "Reduces need for manual adjustments",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 10,
+                        "reason": "Small fixed income cushion.",
+                        "reference": "Provides stability during crashes",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: x < 40), risk_tolerance="High"),
+        InvestmentGoal(time_horizon=P(lambda x: x >= 7)),
+        salience=65,
+    )
+    def rule_growth_oriented(self):
+        """
+        RULE 6: Growth-Oriented Portfolio
+        Age < 40 + High Risk + 7+ years
+        Slightly more conservative than aggressive, but still equity-focused
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (18, 39),
+            "time_horizon_min": 7,
+            "goal_type": "Wealth Building",  # Match mapped frontend value
+            "risk_tolerance": "High",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 8, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 6",
+                "rule_name": "Growth-Oriented Portfolio",
+                "salience": 65,
+                "confidence": round(primary_confidence),
+                "description": "Equity-focused with moderate stability",
+                "condition": "Age < 40 AND Risk Tolerance = High AND Time Horizon ≥ 7 years",
+                "action": "Allocate 70% equities + 30% bonds/income funds",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Equity funds for diversified growth exposure with professional management.",
+                reference="Equity unit trusts historical performance: 15-20% p.a.",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=25,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Balanced approach combining growth and stability.",
+                reference="Balanced funds provide 12-15% returns with lower volatility",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="cse_blue_chip_stocks",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Direct blue chip holdings for long-term wealth creation.",
+                reference="Blue chip stocks: JKH, Commercial Bank, Hayleys - 18-25% returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Bond component for downside protection and income generation.",
+                reference="Income funds: 9-11% stable returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="corporate_bonds",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Higher yields than government bonds with acceptable credit risk.",
+                reference="Corporate debentures (DFCC, JKH): 12-14% p.a.",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Growth Focus
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Enhanced Growth",
+                "confidence": round(alt1_confidence),
+                "description": "More equity exposure for higher returns",
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 40,
+                        "reason": "Higher equity allocation for growth.",
+                        "reference": "Maximize long-term returns",
+                    },
+                    {
+                        "asset_class": "cse_blue_chip_stocks",
+                        "percent": 30,
+                        "reason": "Direct stock ownership for control.",
+                        "reference": "Blue chips: JKH, COMB, Dialog",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 20,
+                        "reason": "Balanced component for stability.",
+                        "reference": "Professional rebalancing",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 10,
+                        "reason": "Fixed income for downside protection.",
+                        "reference": "9-11% stable returns",
+                    },
+                ],
+            }
+        )
+
+    # ==================================================================================
+    # PHASE 5: BALANCED/MODERATE PORTFOLIOS
+    # ==================================================================================
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(risk_tolerance="Moderate"),
+        InvestmentGoal(time_horizon=P(lambda x: x >= 5)),
+        salience=60,
+    )
+    def rule_moderate_balanced(self):
+        """
+        RULE 7: Moderate Risk - Balanced Portfolio
+        Source: 60-40 rule (60% equity, 40% bonds) for moderate investors
+        Suitable for middle-aged investors with medium risk tolerance
+        Expected return: 12-15% p.a.
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (30, 50),
+            "time_horizon_min": 5,
+            "goal_type": "Wealth Building",  # Default for moderate balanced
+            "risk_tolerance": "Moderate",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 10, 50)
+        alt2_confidence = max(primary_confidence - 5, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 7",
+                "rule_name": "Moderate Balanced Portfolio",
+                "salience": 60,
+                "confidence": round(primary_confidence),
+                "description": "Classic 60-40 balanced allocation",
+                "condition": "Risk Tolerance = Moderate AND Time Horizon ≥ 5 years",
+                "action": "Allocate 60% growth assets (balanced/equity funds) + 40% fixed income",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=40,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="One-stop solution for balanced growth - automatically maintains 50-50 equity-debt mix.",
+                reference="Balanced funds: NDB Wealth Balanced, CAL Growth & Income - 12-15% returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Equity component for growth while professional managers handle volatility.",
+                reference="Equity exposure provides inflation-beating returns over medium term",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income for stability and regular returns.",
+                reference="Bond funds deliver predictable 9-11% annual income",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="cse_blue_chip_stocks",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Select blue chip exposure for dividend income and capital appreciation.",
+                reference="Blue chip dividends provide 3-5% yield plus capital gains",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="fixed_deposits",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Capital preservation component with guaranteed returns.",
+                reference="FDs provide 9-11% guaranteed returns as portfolio anchor",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - More Growth
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Growth-Oriented",
+                "confidence": round(alt1_confidence),
+                "description": "Higher equity exposure for growth",
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 40,
+                        "reason": "Increased equity allocation for higher growth potential.",
+                        "reference": "Equity funds: 15-20% long-term returns",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 30,
+                        "reason": "Balanced core holding.",
+                        "reference": "Auto-rebalancing feature",
+                    },
+                    {
+                        "asset_class": "cse_blue_chip_stocks",
+                        "percent": 15,
+                        "reason": "Direct stock ownership.",
+                        "reference": "Blue chips: JKH, COMB, Dialog",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 15,
+                        "reason": "Fixed income stability.",
+                        "reference": "9-11% stable returns",
+                    },
+                ],
+            }
+        )
+
+        # ALTERNATIVE PLAN 2 (dynamic confidence) - More Conservative
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 2: Conservative Balance",
+                "confidence": round(alt2_confidence),
+                "description": "Lower volatility with more fixed income",
+                "allocations": [
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 50,
+                        "reason": "Larger balanced allocation for stability.",
+                        "reference": "One-stop diversified solution",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 30,
+                        "reason": "Increased fixed income for reduced volatility.",
+                        "reference": "Bond funds 9-11%",
+                    },
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 20,
+                        "reason": "Guaranteed returns component.",
+                        "reference": "FDs 9-11% guaranteed",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: 35 <= x < 50), risk_tolerance="Moderate"),
+        salience=55,
+    )
+    def rule_middle_age_moderate(self):
+        """
+        RULE 8: Middle-aged Moderate Investor
+        Age 35-50 + Moderate risk
+        Building wealth while managing responsibilities
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (35, 49),
+            "time_horizon_min": 5,
+            "goal_type": "Wealth Building",  # Default for middle age moderate
+            "risk_tolerance": "Moderate",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 5, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 8",
+                "rule_name": "Middle-Age Moderate Investor",
+                "salience": 55,
+                "confidence": round(primary_confidence),
+                "description": "Balanced portfolio for mid-career professionals",
+                "condition": "Age 35-50 AND Risk Tolerance = Moderate",
+                "action": "Allocate 60% balanced/equity funds + 40% bonds",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=35,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Balanced funds ideal for busy professionals - automatic portfolio management.",
+                reference="Balanced allocation suitable for age 35-50 demographic",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=25,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Equity exposure for long-term growth to meet retirement goals.",
+                reference="Still 15-20 years to retirement - can handle equity volatility",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=25,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income for portfolio stability and income needs.",
+                reference="Income funds provide stable 9-11% returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="government_bonds",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Government securities for risk-free component of portfolio.",
+                reference="T-Bonds: 11-13% p.a. with sovereign guarantee",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Growth Tilt
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Growth-Focused",
+                "confidence": round(alt1_confidence),
+                "description": "Higher equity for mid-career growth",
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 35,
+                        "reason": "Increased equity for wealth building.",
+                        "reference": "Still time to recover from volatility",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 35,
+                        "reason": "Core balanced holding.",
+                        "reference": "Automatic rebalancing",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 20,
+                        "reason": "Fixed income stability.",
+                        "reference": "Bond funds 9-11%",
+                    },
+                    {
+                        "asset_class": "government_bonds",
+                        "percent": 10,
+                        "reason": "Sovereign security component.",
+                        "reference": "Safe anchor",
+                    },
+                ],
+            }
+        )
+
+    # ==================================================================================
+    # PHASE 6: CONSERVATIVE PORTFOLIOS (Low Risk)
+    # ==================================================================================
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(risk_tolerance="Low"),
+        salience=50,
+    )
+    def rule_conservative_portfolio(self):
+        """
+        RULE 9: Conservative Portfolio - Capital Preservation
+        Source: Conservative allocation for risk-averse investors
+        Focus: Preserve capital, generate steady income
+        Expected return: 9-12% p.a. with minimal volatility
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (18, 100),
+            "time_horizon_min": 3,
+            "goal_type": "Savings",  # Conservative goal
+            "risk_tolerance": "Low",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 7, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 9",
+                "rule_name": "Conservative Portfolio",
+                "salience": 50,
+                "confidence": round(primary_confidence),
+                "description": "Capital preservation with minimal risk",
+                "condition": "Risk Tolerance = Low",
+                "action": "Allocate 80% fixed income (FDs, Bonds, Income Funds) + 20% balanced funds",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="fixed_deposits",
+                percent=40,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Guaranteed returns with zero market risk. Suitable for conservative investors.",
+                reference="FD rates: 9-11% p.a. across major banks (Commercial, HNB, Sampath)",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="government_bonds",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Government backing ensures capital safety with better returns than FDs.",
+                reference="Treasury Bonds: 11-13% p.a. - Central Bank of Sri Lanka",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Professional bond fund management with diversification benefits.",
+                reference="Gilt-edge funds: NDB Wealth, CAL Income Fund - 9-11% returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Liquidity buffer with better returns than savings accounts.",
+                reference="Money market funds: 7-8% returns with instant liquidity",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Ultra Conservative
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Maximum Safety",
+                "confidence": round(alt1_confidence),
+                "description": "100% guaranteed returns focus",
+                "allocations": [
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 60,
+                        "reason": "Maximum allocation to guaranteed bank deposits.",
+                        "reference": "Zero market risk",
+                    },
+                    {
+                        "asset_class": "government_bonds",
+                        "percent": 30,
+                        "reason": "Government-backed securities.",
+                        "reference": "Sovereign guarantee",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 10,
+                        "reason": "Liquidity buffer.",
+                        "reference": "Instant access",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: x >= 50), risk_tolerance="Low"),
+        salience=52,
+    )
+    def rule_pre_retirement_conservative(self):
+        """
+        RULE 10: Pre-retirement Conservative (Age 50+, Low Risk)
+        Focus on capital preservation with minimal equity
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (50, 65),
+            "time_horizon_min": 3,
+            "goal_type": user_profile.get("goal_type", "Retirement"),
+            "risk_tolerance": "Low",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 6, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 10",
+                "rule_name": "Pre-Retirement Conservative",
+                "salience": 52,
+                "confidence": round(primary_confidence),
+                "description": "Conservative allocation for pre-retirement (age 50+)",
+                "condition": "Age ≥ 50 AND Risk Tolerance = Low",
+                "action": "Allocate 85% fixed income + 15% balanced/blue chips",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="fixed_deposits",
+                percent=35,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Guaranteed returns crucial as retirement approaches.",
+                reference="FDs provide predictable income for retirement planning",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="government_bonds",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Long-term government securities for stable retirement income.",
+                reference="Government bonds: 11-13% p.a. with sovereign backing",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Bond funds for diversified fixed income exposure.",
+                reference="Income funds managed by professionals with steady returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Small balanced fund allocation for moderate growth.",
+                reference="Limited equity exposure through balanced funds",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=5,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Emergency liquidity buffer.",
+                reference="Money market funds for immediate cash needs",
+            )
+        )
+
+    # ==================================================================================
+    # PHASE 7: SPECIFIC GOAL-BASED ALLOCATIONS
+    # ==================================================================================
+
+    @Rule(
+        NOT(Allocation()),
+        InvestmentGoal(goal_type="Child Education"),
+        InvestmentGoal(time_horizon=P(lambda x: 5 <= x < 10)),
+        salience=58,
+    )
+    def rule_education_planning(self):
+        """
+        RULE 11: Child's Education Planning (5-10 years)
+        Goal-specific: Education costs rising 8-10% annually in Sri Lanka
+        Need growth to beat inflation while preserving capital
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (25, 50),
+            "time_horizon_min": 5,
+            "goal_type": "Education",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 6, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 11",
+                "rule_name": "Education Planning",
+                "salience": 58,
+                "confidence": round(primary_confidence),
+                "description": "Balanced growth for education savings (5-10 years)",
+                "condition": "Goal = Child Education AND Time Horizon 5-10 years",
+                "action": "Allocate 65% balanced/equity funds + 35% fixed income",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=40,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Balanced growth to beat education inflation (8-10% annually) while managing risk.",
+                reference="Education costs in Sri Lanka rising 8-10% annually - need equity exposure",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=25,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Equity component for growth over medium-term education timeline.",
+                reference="5-10 year horizon allows for equity market participation",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income for stability as education date approaches.",
+                reference="Bond funds provide stable returns: 9-11% p.a.",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="fixed_deposits",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Guaranteed component to ensure minimum fund availability.",
+                reference="FDs ensure guaranteed funds for education expenses",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Growth Focus
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Higher Growth",
+                "confidence": round(alt1_confidence),
+                "description": "More equity to beat education inflation",
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 35,
+                        "reason": "Higher equity for inflation-beating returns.",
+                        "reference": "Education costs rise 8-10% annually",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 35,
+                        "reason": "Balanced growth with stability.",
+                        "reference": "Professional management",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 20,
+                        "reason": "Fixed income component.",
+                        "reference": "9-11% stable returns",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 10,
+                        "reason": "Liquidity for education needs.",
+                        "reference": "Quick access when needed",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        InvestmentGoal(goal_type="Home Purchase"),
+        InvestmentGoal(time_horizon=P(lambda x: 3 <= x < 7)),
+        salience=57,
+    )
+    def rule_home_purchase_planning(self):
+        """
+        RULE 12: Home Purchase Goal (3-7 years)
+        Property down payment requires capital preservation with moderate growth
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (25, 45),
+            "time_horizon_min": 3,
+            "goal_type": "Home Purchase",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 12",
+                "rule_name": "Home Purchase Planning",
+                "salience": 57,
+                "confidence": round(primary_confidence),
+                "description": "Conservative allocation for home down payment (3-7 years)",
+                "condition": "Goal = Home Purchase AND Time Horizon 3-7 years",
+                "action": "Allocate 60% fixed income (FDs, bonds) + 40% balanced/equity",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="fixed_deposits",
+                percent=40,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Guaranteed capital for home down payment - cannot risk market volatility.",
+                reference="Down payment funds need capital guarantee: FDs 9-11% p.a.",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Moderate growth to accumulate larger down payment while managing risk.",
+                reference="Balanced funds provide 12-15% growth potential",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Stable bond returns to supplement fixed deposits.",
+                reference="Bond funds: 9-11% returns with lower risk than equities",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Liquidity for quick access when property opportunity arises.",
+                reference="Money market funds provide instant liquidity",
+            )
+        )
+
+    # ==================================================================================
+    # NEW RULES: Additional Investment Scenarios with Alternative Plans
+    # ==================================================================================
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: 25 <= x < 35), risk_tolerance="Moderate"),
+        InvestmentGoal(goal_type="Wealth Building", time_horizon=P(lambda x: x >= 6)),
+        salience=68,
+    )
+    def rule_young_professional_wealth(self):
+        """
+        RULE 14: Young Professional Wealth Building
+        Age 25-35, Moderate Risk, Long-term wealth building (6+ years)
+        Reference: https://www.investopedia.com/articles/personal-finance/032216/how-your-asset-allocation-impacts-returns.asp
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (25, 34),
+            "time_horizon_min": 6,
+            "goal_type": "Wealth Building",
+            "risk_tolerance": "Moderate",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 8, 50)
+        alt2_confidence = max(primary_confidence - 5, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 14",
+                "rule_name": "Young Professional Wealth Building",
+                "salience": 68,
+                "confidence": round(primary_confidence),
+                "description": "Balanced growth strategy for young professionals",
+                "condition": "Age 25-35 AND Moderate Risk AND Wealth Building goal (6+ years)",
+                "action": "Primary: 65% equity + 35% bonds",
+            }
+        )
+
+        # PRIMARY PLAN (dynamic confidence) - Balanced Growth
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=40,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Professional management with automatic rebalancing between stocks (50%) and bonds (50%).",
+                reference="NDB Balanced Fund, CAL Growth & Income - average 12-15% returns - https://www.cse.lk",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=25,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Additional equity exposure for long-term growth potential.",
+                reference="Equity funds average 15-20% returns over 10 years",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income stability during market volatility.",
+                reference="Bond funds provide 9-11% stable returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Liquidity buffer for opportunities and emergencies.",
+                reference="Money market funds: 7-8% with T+1 liquidity",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - More Aggressive
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Growth-Focused",
+                "confidence": round(alt1_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 45,
+                        "reason": "Maximum equity exposure through professional management.",
+                        "reference": "Suitable if comfortable with short-term volatility",
+                    },
+                    {
+                        "asset_class": "cse_blue_chip_stocks",
+                        "percent": 20,
+                        "reason": "Direct stock ownership in established companies.",
+                        "reference": "JKH, COMB, Dialog - dividend + growth",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 25,
+                        "reason": "Core balanced allocation for stability.",
+                        "reference": "Automatic rebalancing feature",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 10,
+                        "reason": "Minimal cash buffer.",
+                        "reference": "7-8% liquid returns",
+                    },
+                ],
+            }
+        )
+
+        # ALTERNATIVE PLAN 2 (dynamic confidence) - More Conservative
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 2: Stability-Focused",
+                "confidence": round(alt2_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 50,
+                        "reason": "Higher balanced fund allocation for auto-diversification.",
+                        "reference": "Set-and-forget approach",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 30,
+                        "reason": "Increased fixed income for lower volatility.",
+                        "reference": "Bond funds 9-11% stable",
+                    },
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 15,
+                        "reason": "Modest equity exposure for growth.",
+                        "reference": "Reduced market risk",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 5,
+                        "reason": "Emergency liquidity.",
+                        "reference": "Instant access funds",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(
+            age=P(lambda x: 35 <= x < 45), monthly_income=P(lambda x: x >= 200000)
+        ),
+        InvestmentGoal(time_horizon=P(lambda x: x >= 7)),
+        salience=66,
+    )
+    def rule_high_income_growth(self):
+        """
+        RULE 15: High-Income Professional Growth
+        Age 35-45, High income (200K+), medium-long term
+        Reference: https://www.investopedia.com/terms/h/high-net-worth-individuals-hnwi.asp
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (35, 44),
+            "time_horizon_min": 7,
+            "goal_type": user_profile.get("goal_type", "wealth_building"),
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 10, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 15",
+                "rule_name": "High-Income Professional Portfolio",
+                "salience": 66,
+                "confidence": round(primary_confidence),
+                "description": "Diversified growth for high earners",
+                "condition": "Age 35-45 AND Monthly income ≥ LKR 200,000 AND Time horizon ≥ 7 years",
+                "action": "Primary: Diversified across multiple asset classes",
+            }
+        )
+
+        # PRIMARY PLAN (dynamic confidence)
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Core equity allocation managed by professionals.",
+                reference="Diversification across CSE sectors - https://www.cse.lk",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="cse_blue_chip_stocks",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Direct ownership of premium Sri Lankan companies.",
+                reference="Blue chips: JKH, COMB, Dialog, Hemas",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Balanced component for automatic rebalancing.",
+                reference="50-50 equity-debt mix",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="government_bonds",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Sovereign guarantee with attractive yields.",
+                reference="SLDB 11-13% annual returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income stability.",
+                reference="Bond funds 9-11%",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=5,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Liquidity for opportunities.",
+                reference="7-8% returns, instant access",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Real Estate Focus
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Property-Oriented",
+                "confidence": round(alt1_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "real_estate",
+                        "percent": 40,
+                        "reason": "Real estate as primary wealth builder.",
+                        "reference": "Colombo property appreciation 8-12% annually",
+                    },
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 25,
+                        "reason": "Equity growth component.",
+                        "reference": "Stock market exposure",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 20,
+                        "reason": "Liquid balanced allocation.",
+                        "reference": "Easy to liquidate if needed",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 15,
+                        "reason": "Cash buffer for property deals.",
+                        "reference": "Quick access to capital",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: x < 30), current_savings=P(lambda x: x < 100000)),
+        InvestmentGoal(goal_type="Wealth Building"),
+        salience=64,
+    )
+    def rule_beginner_investor(self):
+        """
+        RULE 16: Beginner Investor - Small Capital
+        Young with limited savings, just starting investment journey
+        Reference: https://www.investopedia.com/articles/younginvestors/08/eight-tips.asp
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (18, 29),
+            "time_horizon_min": 3,
+            "goal_type": "Wealth Building",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 16",
+                "rule_name": "Beginner Investor Portfolio",
+                "salience": 64,
+                "confidence": round(primary_confidence),
+                "description": "Simple, low-cost portfolio for beginners",
+                "condition": "Age < 30 AND Savings < LKR 100,000 AND Wealth Building goal",
+                "action": "Primary: Start with unit trusts for diversification",
+            }
+        )
+
+        # PRIMARY PLAN (dynamic confidence) - Simple & Diversified
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=60,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Best starter investment - instant diversification with professional management. Low minimum investment.",
+                reference="Most balanced funds accept minimum LKR 5,000 - NDB, CAL, Softlogic",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Build emergency fund while earning better than savings account returns.",
+                reference="7-8% returns with same-day liquidity",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="savings_account",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Instant access cash for true emergencies.",
+                reference="Maintain 1 month expenses liquid",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (70% confidence) - Aggressive Learning
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Learn & Grow",
+                "confidence": 70,
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 50,
+                        "reason": "Learn equity investing through fund managers.",
+                        "reference": "Higher growth potential for young investors",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 30,
+                        "reason": "Core diversified holding.",
+                        "reference": "Automatic rebalancing",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 20,
+                        "reason": "Safety net while learning.",
+                        "reference": "Reduce risk while gaining experience",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(age=P(lambda x: 45 <= x < 55), risk_tolerance="Moderate"),
+        InvestmentGoal(goal_type="Retirement", time_horizon=P(lambda x: 10 <= x < 15)),
+        salience=72,
+    )
+    def rule_pre_retirement_planning(self):
+        """
+        RULE 17: Pre-Retirement Planning (10-15 years out)
+        Age 45-55, planning for retirement in 10-15 years
+        Reference: https://www.investopedia.com/retirement-planning-guide-4689695
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (45, 54),
+            "time_horizon_min": 10,
+            "goal_type": "Retirement",
+            "risk_tolerance": "Moderate",
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 8, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 17",
+                "rule_name": "Pre-Retirement Accumulation",
+                "salience": 72,
+                "confidence": round(primary_confidence),
+                "description": "Balanced growth with gradual shift to income",
+                "condition": "Age 45-55 AND Moderate Risk AND Retirement goal (10-15 years)",
+                "action": "Primary: 50% equity + 50% fixed income",
+            }
+        )
+
+        # PRIMARY PLAN (dynamic confidence)
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=35,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Core balanced allocation for auto-diversification as you approach retirement.",
+                reference="Ideal for pre-retirement phase",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Continued equity exposure for growth, but measured.",
+                reference="Still 10-15 years to ride out volatility",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=20,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Building fixed income base for retirement income.",
+                reference="Bond funds 9-11% annual returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="government_bonds",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Sovereign guaranteed returns as safety anchor.",
+                reference="SLDB provides 11-13% secure returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Liquidity as you approach retirement.",
+                reference="7-8% with instant access",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Income Focus
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Income-Oriented",
+                "confidence": round(alt1_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 35,
+                        "reason": "Maximum income generation focus.",
+                        "reference": "Building retirement income stream",
+                    },
+                    {
+                        "asset_class": "government_bonds",
+                        "percent": 25,
+                        "reason": "Government guaranteed returns.",
+                        "reference": "11-13% sovereign bonds",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 25,
+                        "reason": "Some growth potential.",
+                        "reference": "Balanced approach",
+                    },
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 15,
+                        "reason": "Capital preservation increasing.",
+                        "reference": "9-11% guaranteed returns",
+                    },
+                ],
+            }
+        )
+
+        # ALTERNATIVE PLAN 2 (dynamic confidence) - Growth Extension
+        alt2_confidence = max(primary_confidence - 5, 50)
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 2: Extended Growth",
+                "confidence": round(alt2_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 40,
+                        "reason": "Higher equity if retirement well-funded.",
+                        "reference": "Maximize growth if on track",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 30,
+                        "reason": "Balanced core.",
+                        "reference": "Automatic rebalancing",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 20,
+                        "reason": "Income component.",
+                        "reference": "Stable returns",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 10,
+                        "reason": "Liquidity buffer.",
+                        "reference": "Emergency access",
+                    },
+                ],
+            }
+        )
+
+    @Rule(
+        NOT(Allocation()),
+        UserProfile(
+            monthly_income=P(lambda x: x >= 150000),
+            monthly_expenses=P(lambda x: x < 75000),
+        ),
+        InvestmentGoal(time_horizon=P(lambda x: x >= 5)),
+        salience=62,
+    )
+    def rule_high_savings_rate(self):
+        """
+        RULE 18: High Savings Rate Investor
+        High income with low expenses (50%+ savings rate)
+        Reference: https://www.mrmoneymustache.com/2012/01/13/the-shockingly-simple-math-behind-early-retirement/
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (18, 65),  # Wide range for high savers
+            "time_horizon_min": 5,
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 7, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 18",
+                "rule_name": "High Savings Rate Accelerator",
+                "salience": 62,
+                "confidence": round(primary_confidence),
+                "description": "Aggressive wealth building for high savers",
+                "condition": "Monthly income ≥ LKR 150,000 AND Monthly expenses < LKR 75,000 (50%+ savings rate)",
+                "action": "Primary: Maximize growth with diversification",
+            }
+        )
+
+        # PRIMARY PLAN (dynamic confidence)
+        self.declare(
+            Allocation(
+                asset_class="equity_unit_trusts",
+                percent=35,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="High savings rate allows aggressive equity allocation.",
+                reference="Can weather volatility with continued contributions",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=25,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Balanced component for automatic risk management.",
+                reference="Professional rebalancing",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="cse_blue_chip_stocks",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Direct stock ownership for dividend income stream.",
+                reference="Blue chip dividends 3-5%",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=15,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income for stability.",
+                reference="9-11% bond returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Liquidity to buy market dips.",
+                reference="Keep powder dry for opportunities",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - FIRE Strategy
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Financial Independence Path",
+                "confidence": round(alt1_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "equity_unit_trusts",
+                        "percent": 45,
+                        "reason": "Maximum equity for early retirement goal.",
+                        "reference": "FIRE movement strategy",
+                    },
+                    {
+                        "asset_class": "cse_blue_chip_stocks",
+                        "percent": 20,
+                        "reason": "Dividend income for future passive income.",
+                        "reference": "Building income stream",
+                    },
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 20,
+                        "reason": "Balanced diversification.",
+                        "reference": "Risk management",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 15,
+                        "reason": "Income component.",
+                        "reference": "Stability anchor",
+                    },
+                ],
+            }
+        )
+
+    # ==================================================================================
+    # PHASE 8: DEFAULT RULE (Lowest Priority)
+    # ==================================================================================
+
+    @Rule(NOT(Allocation()), salience=-10)
+    def rule_default_recommendation(self):
+        """
+        RULE 19: Default Moderate Portfolio
+        Fallback rule when no specific conditions are met
+        Safe, balanced approach suitable for most investors
+        Reference: https://www.investopedia.com/terms/b/balancedinvestmentstrategy.asp
+        """
+        # Get user profile data and calculate confidence
+        user_profile = self.get_user_profile_data()
+        rule_conditions = {
+            "age_range": (18, 65),  # Wide default range
+            "time_horizon_min": 1,
+        }
+        primary_confidence = self.calculate_bayesian_confidence(
+            user_profile, rule_conditions
+        )
+        alt1_confidence = max(primary_confidence - 10, 50)
+
+        self.fired_rules.append(
+            {
+                "rule_number": "Rule 19",
+                "rule_name": "Default Balanced Portfolio",
+                "salience": -10,
+                "confidence": round(primary_confidence),
+                "description": "Fallback balanced portfolio when no specific rules match",
+                "condition": "No other rules matched",
+                "action": "Allocate 60% Balanced Funds + 30% Income Funds + 10% Money Market",
+            }
+        )
+
+        self.declare(
+            Allocation(
+                asset_class="balanced_unit_trusts",
+                percent=60,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Balanced fund is the safest default - automatically maintains diversified portfolio.",
+                reference="Default allocation: Balanced funds suitable for most investors - https://www.investopedia.com/ask/answers/021816/what-difference-between-targeted-and-balanced-mutual-fund.asp",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="income_unit_trusts",
+                percent=30,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Fixed income component for stability.",
+                reference="Bond funds provide stable 9-11% annual returns",
+            )
+        )
+        self.declare(
+            Allocation(
+                asset_class="money_market_funds",
+                percent=10,
+                plan_type="primary",
+                confidence=round(primary_confidence),
+                reason="Liquidity buffer for emergencies.",
+                reference="Money market funds: 7-8% with high liquidity",
+            )
+        )
+
+        # ALTERNATIVE PLAN 1 (dynamic confidence) - Conservative Default
+        self.alternative_plans.append(
+            {
+                "plan_name": "Alternative Plan 1: Conservative Default",
+                "confidence": round(alt1_confidence),
+                "allocations": [
+                    {
+                        "asset_class": "balanced_unit_trusts",
+                        "percent": 50,
+                        "reason": "Reduced balanced allocation.",
+                        "reference": "More conservative approach",
+                    },
+                    {
+                        "asset_class": "income_unit_trusts",
+                        "percent": 30,
+                        "reason": "Same income allocation.",
+                        "reference": "Stability focus",
+                    },
+                    {
+                        "asset_class": "money_market_funds",
+                        "percent": 15,
+                        "reason": "Higher liquidity.",
+                        "reference": "More cash available",
+                    },
+                    {
+                        "asset_class": "fixed_deposits",
+                        "percent": 5,
+                        "reason": "Small guaranteed component.",
+                        "reference": "Capital preservation",
+                    },
+                ],
+            }
+        )
